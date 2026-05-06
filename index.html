@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (사운드 무결성 & 타석 공간감 완벽 패치)</title>
+    <title>리얼 야구 (완벽한 타격 오버랩 & 3D 공간 최적화)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -19,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (사운드 오버랩 & 실시간 타석 이동 패치)</h1>
+    <h1>리얼 야구 (타격 심리스 페이드아웃 & 보폭 0.5m 패치)</h1>
     
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
@@ -43,7 +43,6 @@
         const audioBuffers = {}; 
         const pitchBufferCache = {}; 
         
-        // 💡 발소리(walk1.ogg) 에셋 추가
         const SOUND_URLS = { 
             hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
             glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
@@ -90,6 +89,7 @@
         let pitchStartTime = 0;
         let pitchTimeout;
         
+        // 💡 오디오 노드를 구조체로 관리하여 페이드아웃 제어
         let activeNodes = [];
         
         let boxStep = 0; 
@@ -104,14 +104,35 @@
             setTimeout(() => { announcer.textContent = text; }, 50);
         }
 
-        function stopAllActiveNodes() {
-            activeNodes.forEach(node => { try { node.stop(); } catch(e) {} });
+        // 💡 타격 시 호출되는 부드러운 페이드아웃 함수 (0.1초)
+        function handleHitFadeOut() {
+            const now = audioCtx.currentTime;
+            activeNodes.forEach(node => {
+                try {
+                    if (node.type === 'pitch') {
+                        // 날아오는 공 소리는 0.1초 동안 자연스럽게 사라짐
+                        node.gain.cancelScheduledValues(now);
+                        node.gain.setValueAtTime(node.gain.value, now);
+                        node.gain.linearRampToValueAtTime(0.001, now + 0.1); 
+                        node.src.stop(now + 0.15);
+                    } else if (node.type === 'mitt') {
+                        // 미트나 흙 소리는 타격했으므로 아예 나지 않게 즉시 정지
+                        node.src.stop(now); 
+                    }
+                } catch(e) {}
+            });
             activeNodes = [];
         }
 
-        // 💡 3D 청취자(타자) 위치를 즉시 업데이트하는 함수
+        // 💡 투구 시작 시 완벽한 초기화를 위한 강제 정지 함수
+        function stopAllActiveNodes() {
+            activeNodes.forEach(node => { try { node.src.stop(); } catch(e) {} });
+            activeNodes = [];
+        }
+
         function updateListenerPosition() {
-            let currentListenerX = isLeftBatter ? (boxStep * -0.7) : (boxStep * 0.7);
+            // 💡 보폭 0.5m로 조정
+            let currentListenerX = isLeftBatter ? (boxStep * -0.5) : (boxStep * 0.5);
             if(audioCtx.listener.positionX) {
                 audioCtx.listener.positionX.value = currentListenerX;
                 audioCtx.listener.positionY.value = 1.62;
@@ -121,20 +142,22 @@
             }
         }
 
-        // 💡 타석 이동 발소리 함수
         function playWalkSound() {
             const panner = audioCtx.createPanner();
             panner.panningModel = 'HRTF';
-            let currentListenerX = isLeftBatter ? (boxStep * -0.7) : (boxStep * 0.7);
-            
+            let currentListenerX = isLeftBatter ? (boxStep * -0.5) : (boxStep * 0.5);
             panner.positionX.value = currentListenerX;
-            panner.positionY.value = 0; // 발 높이
+            panner.positionY.value = 0; 
             panner.positionZ.value = 0;
+
+            // 💡 발소리 볼륨을 절반(0.5)으로 줄이는 GainNode 추가
+            const walkGain = audioCtx.createGain();
+            walkGain.gain.value = 0.5;
 
             if (audioBuffers["walk1"]) {
                 const src = audioCtx.createBufferSource();
                 src.buffer = audioBuffers["walk1"];
-                src.connect(panner); panner.connect(audioCtx.destination);
+                src.connect(panner); panner.connect(walkGain); walkGain.connect(audioCtx.destination);
                 src.start();
             }
         }
@@ -239,8 +262,6 @@
             let errorZ = (Math.random() * 0.2) - 0.1; let errorY = (Math.random() * 0.1) - 0.05; 
             
             actualZ = aimZ_obj.val + errorZ; 
-            
-            // 💡 좌타자 스트라이크 존 반전: 실제 좌표축을 뒤집어 좌타자도 완벽히 몸쪽/바깥쪽을 동일하게 느끼도록 수정
             if (isLeftBatter) {
                 actualZ = -actualZ; 
             }
@@ -290,9 +311,9 @@
                 pianoEnvelope.gain.setValueAtTime(0, startTime);
                 pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
                 
-                // 💡 사운드 겹침 완벽 수정: 미트 소리가 들릴 때 끊지 않고 오히려 유지를 한 뒤, 서서히 0.2초간 페이드아웃 (완전한 심리스 오버랩)
+                // 💡 미트 소리와 자연스럽게 겹치도록 0.1초 페이드아웃
                 pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                pianoEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.2);
+                pianoEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; flightNoiseSrc.loop = true; 
@@ -304,15 +325,25 @@
                 noiseEnvelope.gain.setValueAtTime(0, startTime);
                 noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
                 
-                // 💡 바람 소리도 미트와 겹친 후 자연스럽게 사라짐
                 noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.2);
+                noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
                 
                 const flightPanner = audioCtx.createPanner();
-                flightPanner.panningModel = 'HRTF'; flightPanner.refDistance = 1; flightPanner.maxDistance = 15; 
+                flightPanner.panningModel = 'HRTF'; 
+                // 💡 전역 느낌 제거: 거리에 따른 볼륨 감쇠를 기하급수적으로 적용하여 궤적을 뚜렷하게 만듦
+                flightPanner.distanceModel = 'exponential'; 
+                flightPanner.rolloffFactor = 1.5; 
+                flightPanner.refDistance = 1; 
+                flightPanner.maxDistance = 20; 
                 
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = aimZ_obj.vol; 
+
+                // 💡 타석 이동 폭 0.5m 반영
+                const batterOffsetX = isLeftBatter ? (boxStep * -0.5) : (boxStep * 0.5);
+                audioCtx.listener.positionX.value = batterOffsetX; 
+                audioCtx.listener.positionY.value = 1.62; 
+                audioCtx.listener.positionZ.value = 0;
 
                 let startX = !isLeftBatter ? -18 : 18; let endX = !isLeftBatter ? 1.5 : -1.5;
 
@@ -328,11 +359,12 @@
 
                 flightSrc.start(startTime); flightNoiseSrc.start(startTime);
                 
-                // 💡 사운드 틱 방지: 오디오 노드를 절대 미트 전에 죽이지 않고 페이드아웃이 완벽히 끝난 후 종료
-                flightSrc.stop(startTime + flightTime + 0.5); 
-                flightNoiseSrc.stop(startTime + flightTime + 0.5); 
+                flightSrc.stop(startTime + flightTime + 0.15); 
+                flightNoiseSrc.stop(startTime + flightTime + 0.15); 
                 
-                activeNodes.push(flightSrc, flightNoiseSrc); 
+                // 💡 제어를 위해 activeNodes에 객체 형태로 저장
+                activeNodes.push({ type: 'pitch', src: flightSrc, gain: pianoEnvelope });
+                activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
 
                 const impactPanner = audioCtx.createPanner();
                 impactPanner.panningModel = 'HRTF'; impactPanner.positionX.value = endX; impactPanner.positionY.value = actualY; impactPanner.positionZ.value = actualZ;
@@ -345,7 +377,7 @@
                     dirtGain.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.2);
                     dirtOsc.connect(impactPanner); impactPanner.connect(dirtGain); dirtGain.connect(audioCtx.destination);
                     dirtOsc.start(startTime + flightTime); dirtOsc.stop(startTime + flightTime + 0.2);
-                    activeNodes.push(dirtOsc);
+                    activeNodes.push({ type: 'mitt', src: dirtOsc });
                 } else {
                     const r = Math.floor(Math.random() * 3) + 1;
                     if (audioBuffers[`glove${r}`]) {
@@ -355,7 +387,7 @@
                         mittGain.gain.value = aimZ_obj.vol + 0.3; 
                         mittSrc.connect(impactPanner); impactPanner.connect(mittGain); mittGain.connect(audioCtx.destination);
                         mittSrc.start(startTime + flightTime);
-                        activeNodes.push(mittSrc);
+                        activeNodes.push({ type: 'mitt', src: mittSrc });
                     } else {
                         const mittOsc = audioCtx.createOscillator();
                         const mittGain = audioCtx.createGain();
@@ -365,7 +397,7 @@
                         mittGain.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.15);
                         mittOsc.connect(impactPanner); impactPanner.connect(mittGain); mittGain.connect(audioCtx.destination);
                         mittOsc.start(startTime + flightTime); mittOsc.stop(startTime + flightTime + 0.15);
-                        activeNodes.push(mittOsc);
+                        activeNodes.push({ type: 'mitt', src: mittOsc });
                     }
                 }
 
@@ -374,7 +406,7 @@
                 pitchTimeout = setTimeout(() => {
                     if (!hasSwung) {
                         if (isBunting) {
-                            let currentListenerX = isLeftBatter ? (boxStep * -0.7) : (boxStep * 0.7);
+                            let currentListenerX = isLeftBatter ? (boxStep * -0.5) : (boxStep * 0.5);
                             playSwingSound(currentListenerX, actualY, actualZ); 
                             speak("헛스윙! 번트 자세를 빼지 않아 스윙 처리됩니다.");
                             isBunting = false; 
@@ -402,14 +434,12 @@
 
             const swingTime = performance.now() - pitchStartTime;
             
-            // 💡 타석 앞/뒤 0.7m 이동에 따른 완벽한 타격 싱크 (1칸당 18ms 보정)
-            const perfectTime = 370 + (boxStep * 18); 
+            // 💡 보폭 0.5m에 맞추어 타이밍 보정치 13ms로 최적화
+            const perfectTime = 370 + (boxStep * 13); 
             
-            let audioHitX = isLeftBatter ? (boxStep * -0.7) : (boxStep * 0.7);
-            
+            let audioHitX = isLeftBatter ? (boxStep * -0.5) : (boxStep * 0.5);
             const timeDiff = Math.abs(swingTime - perfectTime);
             
-            // 💡 물리적 한계선: 타자가 서 있는 위치 기준 1.5칸(약 35ms) 이상 벗어난 타이밍이면 아예 방망이가 닿지 않는 헛스윙 처리
             if (timeDiff > 35) {
                 playSwingSound(audioHitX, actualY, actualZ); 
                 speak("헛스윙! 거리가 맞지 않습니다.");
@@ -425,14 +455,15 @@
             const hitThreshold = currentBuntState ? 35 : 20;
             const foulThreshold = currentBuntState ? 60 : 45;
 
+            // 💡 타격 시 handleHitFadeOut()을 호출하여 공 소리를 0.1초간 부드럽게 끄며 자연스럽게 교차시킴
             if (timeDiff <= hitThreshold) {
-                stopAllActiveNodes(); 
+                handleHitFadeOut(); 
                 clearTimeout(pitchTimeout); 
                 isPitching = false; 
                 playHitSound(audioHitX, actualY, actualZ, currentBuntState); 
                 speak(currentBuntState ? "번트 성공!" : "딱 정타!");
             } else if (timeDiff > hitThreshold && timeDiff <= foulThreshold) {
-                stopAllActiveNodes(); 
+                handleHitFadeOut(); 
                 clearTimeout(pitchTimeout); 
                 isPitching = false; 
                 playFoulSound(audioHitX, actualY, actualZ); 
@@ -446,7 +477,6 @@
             }
         }
 
-        // 💡 꼼수 방지: 인플레이 중 이동 불가 및 이동 시 실시간 공간 리스너 업데이트 로직 
         function moveForward() { 
             if(boxStep > -2) { 
                 boxStep--; 
@@ -476,23 +506,23 @@
             if (e.code === "Space") swingBat(); 
             else if (e.code === "Enter") throwBall(); 
             else if (e.code === "ArrowUp") { 
-                if (isPitching) return; // 💡 투구 중 번트 토글 방지
+                if (isPitching) return; 
                 isBunting = !isBunting;
                 speak(isBunting ? "번트 자세" : "번트 자세 해제");
             }
             else if (e.key.toLowerCase() === "c") {
-                if (isPitching) return; // 💡 투구 중 타석 변경 꼼수 원천 차단
+                if (isPitching) return; 
                 isLeftBatter = !isLeftBatter;
                 boxStep = 0; 
                 updateListenerPosition();
                 speak((isLeftBatter ? "좌타석" : "우타석") + ", 타석 중앙입니다.");
             } 
             else if (e.code === "ArrowLeft") { 
-                if (isPitching) return; // 💡 투구 중 이동 방지
+                if (isPitching) return; 
                 if (!isLeftBatter) moveForward(); else moveBackward(); 
             } 
             else if (e.code === "ArrowRight") { 
-                if (isPitching) return; // 💡 투구 중 이동 방지
+                if (isPitching) return; 
                 if (!isLeftBatter) moveBackward(); else moveForward(); 
             }
             else if (e.code === "ArrowDown") { speak("현재 " + boxNames[boxStep] + "입니다"); }
@@ -524,7 +554,6 @@
                     }
                 }
             }
-            // 💡 게임 로드 시 최초 1회 타자 위치 동기화
             updateListenerPosition();
         }
         
