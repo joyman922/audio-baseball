@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (사운드 무결점 루프 & 0.3m 타석 고정 패치)</title>
+    <title>리얼 야구 (공간 좌표 완벽 동기화 & 잔향 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -19,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (투구음 끊김 방지 & 3단계 타석 패치)</h1>
+    <h1>리얼 야구 (투구음 무결점 잔향 & 1m 타석 이동 패치)</h1>
     
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
@@ -91,7 +91,7 @@
         
         let activeNodes = [];
         
-        // 💡 3단계로 압축. 중앙에서 앞뒤로 0.3m씩 움직임.
+        // 타석 단계 (-1: 앞, 0: 중앙, 1: 뒤)
         let boxStep = 0; 
         const boxNames = {"-1": "타석 앞", "0": "타석 중앙", "1": "타석 뒤"};
         let actualY, actualZ; 
@@ -102,6 +102,13 @@
         function speak(text) {
             announcer.textContent = ""; 
             setTimeout(() => { announcer.textContent = text; }, 50);
+        }
+
+        // 💡 핵심 좌표 계산: 홈플레이트(1.5m)를 기준으로 1m씩 이동하도록 계산
+        function getAvatarX() {
+            let basePlateX = isLeftBatter ? -1.5 : 1.5;
+            let moveOffset = isLeftBatter ? (boxStep * -1.0) : (boxStep * 1.0);
+            return basePlateX + moveOffset;
         }
 
         function handleHitFadeOut() {
@@ -144,8 +151,7 @@
             panner.distanceModel = 'linear';
             panner.refDistance = 1; panner.maxDistance = 25; panner.rolloffFactor = 1;
 
-            // 💡 발소리 위치를 타석 앞뒤 0.3m로 수정
-            let avatarX = isLeftBatter ? (boxStep * -0.3) : (boxStep * 0.3);
+            let avatarX = getAvatarX();
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             
             panner.positionX.value = avatarX;
@@ -214,20 +220,23 @@
 
             panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
 
+            // 💡 파울 소리 증폭 노드 추가
+            const foulGain = audioCtx.createGain();
+            foulGain.gain.value = 2.5; 
+
             let bufferName = "foul1";
             if (audioBuffers[bufferName]) {
                 const source = audioCtx.createBufferSource();
                 source.buffer = audioBuffers[bufferName];
-                source.connect(panner); panner.connect(audioCtx.destination);
+                source.connect(panner); panner.connect(foulGain); foulGain.connect(audioCtx.destination);
                 source.start();
             } else {
                 const osc = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
                 osc.type = "sine"; osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.05);
-                gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
-                osc.connect(panner); panner.connect(gainNode); gainNode.connect(audioCtx.destination);
+                foulGain.gain.setValueAtTime(2.0, audioCtx.currentTime);
+                foulGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.connect(panner); panner.connect(foulGain); foulGain.connect(audioCtx.destination);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.05);
             }
         }
@@ -306,7 +315,6 @@
             setTimeout(() => {
                 const startTime = audioCtx.currentTime + 0.05; 
                 const flightTime = 0.42; 
-                const extendedFlightTime = flightTime + 0.15; 
                 const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
                 
                 let flightSrc;
@@ -324,11 +332,11 @@
                 pianoEnvelope.gain.setValueAtTime(0, startTime);
                 pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
                 
-                // 💡 수정됨: 미트에 도달한 시점(flightTime)부터 0.05초간 볼륨을 유지하고, 이후 0.05초간 서서히 감소 (총 0.1초 겹침)
+                // 💡 수정됨: 미트에 닿은 후(flightTime)에도 소리가 끊기지 않고 0.3초간 서서히 잔향으로 퍼지도록 완전히 교체
                 pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + flightTime + 0.05);
-                pianoEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
-                pianoEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.12);
+                pianoEnvelope.gain.linearRampToValueAtTime(0.6, startTime + flightTime + 0.1);
+                pianoEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.3);
+                pianoEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.35);
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; 
@@ -342,9 +350,9 @@
                 noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
                 
                 noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + flightTime + 0.05);
-                noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
-                noiseEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.12);
+                noiseEnvelope.gain.linearRampToValueAtTime(0.6, startTime + flightTime + 0.1);
+                noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.3);
+                noiseEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.35);
                 
                 const flightPanner = audioCtx.createPanner();
                 flightPanner.panningModel = 'equalpower'; 
@@ -378,8 +386,9 @@
 
                 flightSrc.start(startTime); flightNoiseSrc.start(startTime);
                 
-                flightSrc.stop(startTime + extendedFlightTime); 
-                flightNoiseSrc.stop(startTime + extendedFlightTime); 
+                // 음원 소스를 충분히 길게 확보하여 중간에 증발하지 않게 함 (flightTime + 0.4초 후 완전 정지)
+                flightSrc.stop(startTime + flightTime + 0.4); 
+                flightNoiseSrc.stop(startTime + flightTime + 0.4); 
                 
                 activeNodes.push({ type: 'pitch', src: flightSrc, gain: pianoEnvelope });
                 activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
@@ -431,7 +440,7 @@
                 pitchTimeout = setTimeout(() => {
                     if (!hasSwung) {
                         if (isBunting) {
-                            let avatarX = isLeftBatter ? (boxStep * -0.3) : (boxStep * 0.3);
+                            let avatarX = getAvatarX();
                             playSwingSound(avatarX, actualY, actualZ); 
                             speak("헛스윙! 번트 자세를 빼지 않아 스윙 처리됩니다.");
                             isBunting = false; 
@@ -459,10 +468,10 @@
 
             const swingTime = performance.now() - pitchStartTime;
             
-            // 💡 0.3m 이동에 맞춘 물리적 타이밍 완벽 동기화 (1칸당 7ms 보정)
-            const perfectTime = 370 + (boxStep * 7); 
+            // 💡 투구 속도(19.5m를 0.42초에 도달 = 초속 46.4m)에 맞추어 1m 이동 시 22ms씩 타이밍이 당겨지거나 밀리도록 정확히 수학적 동기화
+            const perfectTime = 370 + (boxStep * 22); 
             
-            let audioHitX = isLeftBatter ? (boxStep * -0.3) : (boxStep * 0.3);
+            let audioHitX = getAvatarX();
             const timeDiff = Math.abs(swingTime - perfectTime);
             
             if (timeDiff > 45) {
