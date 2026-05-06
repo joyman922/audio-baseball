@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (1m 단위 정밀 타격 & 번트 시스템)</title>
+    <title>리얼 야구 (사운드 크로스페이드 & 번트 밸런스 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -19,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (1m 정밀 피칭 & 번트 패치)</h1>
+    <h1>리얼 야구 (정밀 피칭 & 사운드 공백 제거 패치)</h1>
     
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
@@ -43,7 +43,6 @@
         const audioBuffers = {}; 
         const pitchBufferCache = {}; 
         
-        // 💡 모든 오디오 에셋 매핑
         const SOUND_URLS = { 
             hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
             glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
@@ -81,12 +80,12 @@
         }
 
         const zoneTop = 1.05; const zoneBottom = 0.50; 
-        const zoneInside = 3.5; const zoneOutside = -3.5; // 💡 1m 간격 스트라이크 존
+        const zoneInside = 3.5; const zoneOutside = -3.5; 
 
         let isLeftBatter = false; 
         let isPitching = false;
         let hasSwung = false; 
-        let isBunting = false; // 번트 상태 변수
+        let isBunting = false; 
         let pitchStartTime = 0;
         let pitchTimeout;
         
@@ -109,7 +108,6 @@
             activeNodes = [];
         }
 
-        // 💡 스윙 사운드
         function playSwingSound() {
             const r = Math.floor(Math.random() * 2) + 1;
             if (audioBuffers[`swing${r}`]) {
@@ -120,12 +118,12 @@
             }
         }
 
-        // 💡 타격음 (일반 & 번트 분기)
-        function playHitSound(x, y, z) {
+        // 💡 번트 여부를 매개변수로 받아 소리 분기
+        function playHitSound(x, y, z, isBuntHit = false) {
             const panner = audioCtx.createPanner();
             panner.panningModel = 'HRTF'; panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
 
-            let bufferName = isBunting ? "bunt" : `hit${Math.floor(Math.random() * 3) + 1}`;
+            let bufferName = isBuntHit ? "bunt" : `hit${Math.floor(Math.random() * 3) + 1}`;
             
             if (audioBuffers[bufferName]) {
                 const source = audioCtx.createBufferSource();
@@ -173,7 +171,6 @@
             
             stopAllActiveNodes(); 
 
-            // 💡 1m 간격 Z축 배분 & 볼륨 조정 완료
             const targetZOptions = [
                 { name: "사구(A)", val: 5, noteIdx: 0, vol: 0.4 },             
                 { name: "몸쪽 깊은 유인구(A#)", val: 4, noteIdx: 1, vol: 0.5 },   
@@ -216,7 +213,7 @@
                         pitchBufferCache[midiNote] = pitchBuffer; 
                     }
                 } catch(e) {
-                    console.log(`[${midiNote}-2L-1.wav] 파일 로드 실패. 대체 합성음을 사용합니다.`);
+                    console.log(`[${midiNote}-2L-1.wav] 파일 로드 실패`);
                 }
             }
 
@@ -240,6 +237,9 @@
                 const pianoEnvelope = audioCtx.createGain();
                 pianoEnvelope.gain.setValueAtTime(0, startTime);
                 pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
+                // 💡 공백 제거 핵심: 미트에 들어가는 시점(flightTime)부터 0.05초간 자연스럽게 페이드아웃하며 미트 소리와 교차(Crossfade)
+                pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
+                pianoEnvelope.gain.linearRampToValueAtTime(0.01, startTime + flightTime + 0.05);
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; flightNoiseSrc.loop = true; 
@@ -250,6 +250,9 @@
                 const noiseEnvelope = audioCtx.createGain();
                 noiseEnvelope.gain.setValueAtTime(0, startTime);
                 noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
+                // 💡 노이즈 역시 공백 없이 페이드아웃
+                noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
+                noiseEnvelope.gain.linearRampToValueAtTime(0.01, startTime + flightTime + 0.05);
                 
                 const flightPanner = audioCtx.createPanner();
                 flightPanner.panningModel = 'HRTF'; flightPanner.refDistance = 1; flightPanner.maxDistance = 15; 
@@ -274,13 +277,12 @@
 
                 flightSrc.start(startTime); flightNoiseSrc.start(startTime);
                 
-                // 💡 공백 없이 미트 소리와 완벽하게 맞물리기 위해 정확한 시간에 공 소리를 절단
-                flightSrc.stop(startTime + flightTime); 
-                flightNoiseSrc.stop(startTime + flightTime); 
+                // 💡 칼같이 자르지 않고 페이드아웃이 끝나는 지점까지 0.05초 유지
+                flightSrc.stop(startTime + flightTime + 0.05); 
+                flightNoiseSrc.stop(startTime + flightTime + 0.05); 
                 
                 activeNodes.push(flightSrc, flightNoiseSrc); 
 
-                // 💡 미트(포구) 사운드
                 const impactPanner = audioCtx.createPanner();
                 impactPanner.panningModel = 'HRTF'; impactPanner.positionX.value = endX; impactPanner.positionY.value = actualY; impactPanner.positionZ.value = actualZ;
 
@@ -299,12 +301,11 @@
                         const mittSrc = audioCtx.createBufferSource();
                         mittSrc.buffer = audioBuffers[`glove${r}`];
                         const mittGain = audioCtx.createGain();
-                        mittGain.gain.value = aimZ_obj.vol + 0.3; // 💡 공 소리보다 30 증폭
+                        mittGain.gain.value = aimZ_obj.vol + 0.3; 
                         mittSrc.connect(impactPanner); impactPanner.connect(mittGain); mittGain.connect(audioCtx.destination);
                         mittSrc.start(startTime + flightTime);
                         activeNodes.push(mittSrc);
                     } else {
-                        // fallback oscillator
                         const mittOsc = audioCtx.createOscillator();
                         const mittGain = audioCtx.createGain();
                         mittOsc.type = "triangle"; mittOsc.frequency.setValueAtTime(150, startTime + flightTime);
@@ -321,10 +322,10 @@
 
                 pitchTimeout = setTimeout(() => {
                     if (!hasSwung) {
-                        // 💡 번트 자세를 풀지 않고 홈플레이트를 지났을 때 자동 스윙 판정
                         if (isBunting) {
-                            playSwingSound();
+                            playSwingSound(); // 💡 빼지 않으면 헛스윙 처리되어 스윙 소리 출력
                             speak("헛스윙! 번트 자세를 빼지 않아 스윙 처리됩니다.");
+                            isBunting = false; // 자동 해제
                         } else {
                             speak(pitchResultText); 
                         }
@@ -341,34 +342,46 @@
             if (hasSwung) return; 
             
             hasSwung = true; 
-            playSwingSound(); // 💡 스윙 시 즉시 스윙 사운드 출력
+            
+            // 💡 스윙 행위 즉시 현재 번트 상태를 저장하고, 번트 자세는 자동 해제
+            const currentBuntState = isBunting;
+            if (isBunting) {
+                isBunting = false; 
+            }
 
             const swingTime = performance.now() - pitchStartTime;
             const perfectTime = 370 + (boxStep * 15); 
             let audioHitX = isLeftBatter ? (boxStep * -2.0) : (boxStep * 2.0);
             
             if (!isStrike) {
+                playSwingSound(); // 💡 볼에 속았을 때만 스윙 소리 출력
                 speak("헛스윙! 볼에 속았습니다.");
                 return; 
             }
             
             const timeDiff = Math.abs(swingTime - perfectTime);
+            
+            // 💡 번트 시 타격(35) 및 파울(60) 범위 대폭 확대
+            const hitThreshold = currentBuntState ? 35 : 20;
+            const foulThreshold = currentBuntState ? 60 : 45;
 
-            if (timeDiff <= 20) {
+            if (timeDiff <= hitThreshold) {
                 stopAllActiveNodes(); 
                 clearTimeout(pitchTimeout); 
                 isPitching = false; 
-                playHitSound(audioHitX, actualY, actualZ); 
-                speak(isBunting ? "번트 성공!" : "딱 정타!");
-            } else if (timeDiff > 20 && timeDiff <= 45) {
+                playHitSound(audioHitX, actualY, actualZ, currentBuntState); // 정타음만 출력
+                speak(currentBuntState ? "번트 성공!" : "딱 정타!");
+            } else if (timeDiff > hitThreshold && timeDiff <= foulThreshold) {
                 stopAllActiveNodes(); 
                 clearTimeout(pitchTimeout); 
                 isPitching = false; 
-                playFoulSound(audioHitX, actualY, actualZ); 
-                speak("틱! 파울입니다.");
+                playFoulSound(audioHitX, actualY, actualZ); // 파울음만 출력
+                speak(currentBuntState ? "틱! 번트 파울입니다." : "틱! 파울입니다.");
             } else if (swingTime < perfectTime) {
+                playSwingSound(); // 💡 헛스윙 시에만 스윙 소리 출력
                 speak("헛스윙! 빠름"); 
             } else {
+                playSwingSound(); // 💡 헛스윙 시에만 스윙 소리 출력
                 speak("헛스윙! 늦음");
             }
         }
