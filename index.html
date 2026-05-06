@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (공 궤적 포수 도달 & 0.1초 미세 동기화 패치)</title>
+    <title>리얼 야구 (시점 및 발걸음 완벽 중앙 고정 & 0.1m 분할 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -91,7 +91,6 @@
         
         let activeNodes = [];
         
-        // 타석 단계 (-1: 앞, 0: 중앙, 1: 뒤)
         let boxStep = 0; 
         const boxNames = {"-1": "타석 앞", "0": "타석 중앙", "1": "타석 뒤"};
         let actualY, actualZ; 
@@ -104,9 +103,8 @@
             setTimeout(() => { announcer.textContent = text; }, 50);
         }
 
-        // 💡 핵심 좌표 수정: 이동 거리를 인간이 체감할 수 있는 0.4 단위(40cm)로 확장
         function getAvatarX() {
-            let moveOffset = isLeftBatter ? (boxStep * -0.4) : (boxStep * 0.4);
+            let moveOffset = isLeftBatter ? (boxStep * -0.1) : (boxStep * 0.1);
             return moveOffset;
         }
 
@@ -134,13 +132,14 @@
 
         function updateListenerPosition() {
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
-            
+            let avatarX = getAvatarX(); 
+
             if(audioCtx.listener.positionX) {
-                audioCtx.listener.positionX.value = 0;
+                audioCtx.listener.positionX.value = avatarX;
                 audioCtx.listener.positionY.value = 1.62;
                 audioCtx.listener.positionZ.value = currentListenerZ;
             } else {
-                audioCtx.listener.setPosition(0, 1.62, currentListenerZ);
+                audioCtx.listener.setPosition(avatarX, 1.62, currentListenerZ);
             }
         }
 
@@ -151,11 +150,11 @@
             panner.refDistance = 1; panner.maxDistance = 25; panner.rolloffFactor = 1;
 
             let avatarX = getAvatarX();
+            let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             
             panner.positionX.value = avatarX;
             panner.positionY.value = 0; 
-            // 💡 치명적 오류 수정: 발걸음 소리의 기준점을 유저(리스너)의 귀가 아닌 홈플레이트 중앙(Z=0)으로 강제 고정
-            panner.positionZ.value = 0; 
+            panner.positionZ.value = currentListenerZ; 
 
             const walkGain = audioCtx.createGain();
             walkGain.gain.value = 0.5;
@@ -358,7 +357,7 @@
                 flightVolNode.gain.value = aimZ_obj.vol; 
 
                 let currentListenerZ = isLeftBatter ? -3.5 : 3.5;
-                audioCtx.listener.positionX.value = 0; 
+                audioCtx.listener.positionX.value = getAvatarX(); 
                 audioCtx.listener.positionY.value = 1.62; 
                 audioCtx.listener.positionZ.value = currentListenerZ; 
 
@@ -461,8 +460,7 @@
 
             const swingTime = performance.now() - pitchStartTime;
             
-            // 💡 이동 거리가 0.4m로 확장되었으므로, 초속(약 46m/s)에 비례하여 1칸당 9ms씩 물리적 동기화 수정
-            const perfectTime = 370 + (boxStep * 9); 
+            const perfectTime = 370 + (boxStep * 2); 
             
             let audioHitX = getAvatarX();
             const timeDiff = Math.abs(swingTime - perfectTime);
