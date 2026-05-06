@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (공간감 유지 & 완벽한 미트 오버랩 패치)</title>
+    <title>리얼 야구 (순수 스테레오 패닝 & 관통 방지 완벽 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -19,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (공간 지향성 강화 & 사운드 오버랩 패치)</h1>
+    <h1>리얼 야구 (Equalpower 패닝 & 0.01초 타격 정지 패치)</h1>
     
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
@@ -110,10 +110,9 @@
                     if (node.type === 'pitch') {
                         node.gain.cancelScheduledValues(now);
                         node.gain.setValueAtTime(node.gain.value, now);
-                        // 💡 타격 즉시 0.01초 만에 관통 없이 깔끔하게 소멸
-                        node.gain.exponentialRampToValueAtTime(0.001, now + 0.01); 
-                        node.gain.linearRampToValueAtTime(0, now + 0.02);
-                        node.src.stop(now + 0.05); 
+                        // 💡 타격 즉시 0.01초 내로 볼륨 제로화 및 소스 완전 정지 (배트 관통 현상 원천 차단)
+                        node.gain.linearRampToValueAtTime(0.001, now + 0.01); 
+                        node.src.stop(now + 0.01); 
                     } else if (node.type === 'mitt') {
                         node.src.stop(now); 
                     }
@@ -142,7 +141,7 @@
 
         function playWalkSound() {
             const panner = audioCtx.createPanner();
-            panner.panningModel = 'HRTF';
+            panner.panningModel = 'equalpower'; // 💡 스테레오 완벽 분리
             let currentListenerX = isLeftBatter ? (boxStep * -0.5) : (boxStep * 0.5);
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             
@@ -163,7 +162,8 @@
 
         function playSwingSound(x, y, z) {
             const panner = audioCtx.createPanner();
-            panner.panningModel = 'HRTF'; panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
+            panner.panningModel = 'equalpower'; // 💡 스테레오 완벽 분리
+            panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
 
             const r = Math.floor(Math.random() * 2) + 1;
             if (audioBuffers[`swing${r}`]) {
@@ -176,7 +176,8 @@
 
         function playHitSound(x, y, z, isBuntHit = false) {
             const panner = audioCtx.createPanner();
-            panner.panningModel = 'HRTF'; panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
+            panner.panningModel = 'equalpower'; // 💡 스테레오 완벽 분리
+            panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
 
             let bufferName = isBuntHit ? "bunt" : `hit${Math.floor(Math.random() * 3) + 1}`;
             
@@ -198,7 +199,8 @@
 
         function playFoulSound(x, y, z) {
             const panner = audioCtx.createPanner();
-            panner.panningModel = 'HRTF'; panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
+            panner.panningModel = 'equalpower'; // 💡 스테레오 완벽 분리
+            panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
 
             let bufferName = "foul1";
             if (audioBuffers[bufferName]) {
@@ -292,8 +294,8 @@
             setTimeout(() => {
                 const startTime = audioCtx.currentTime + 0.05; 
                 const flightTime = 0.42; 
-                // 💡 공백 제거를 위해 공이 포수 등 뒤쪽(X축 3m 연장선)까지 더 날아가도록 설정 (0.15초 추가 비행)
-                const extendedFlightTime = flightTime + 0.15; 
+                // 페이드아웃 되는 동안 사운드를 유지할 시간 확보
+                const extendedFlightTime = flightTime + 0.1; 
                 const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
                 
                 let flightSrc;
@@ -310,9 +312,10 @@
                 pianoEnvelope.gain.setValueAtTime(0, startTime);
                 pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
                 
-                // 💡 페이드아웃(볼륨 깎기) 원천 차단: 공은 연장된 비행 시간 내내 볼륨을 유지하다가 멀어지며 자연스럽게 사라짐
-                pianoEnvelope.gain.setValueAtTime(1.0, startTime + extendedFlightTime);
-                pianoEnvelope.gain.linearRampToValueAtTime(0, startTime + extendedFlightTime + 0.05);
+                // 💡 공 소리가 미트에 닿은 후 0.1초 동안 겹치며 사라짐
+                pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
+                pianoEnvelope.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.1);
+                pianoEnvelope.gain.linearRampToValueAtTime(0, startTime + flightTime + 0.12);
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; flightNoiseSrc.loop = true; 
@@ -324,14 +327,15 @@
                 noiseEnvelope.gain.setValueAtTime(0, startTime);
                 noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
                 
-                noiseEnvelope.gain.setValueAtTime(1.0, startTime + extendedFlightTime);
-                noiseEnvelope.gain.linearRampToValueAtTime(0, startTime + extendedFlightTime + 0.05);
+                noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
+                noiseEnvelope.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.1);
+                noiseEnvelope.gain.linearRampToValueAtTime(0, startTime + flightTime + 0.12);
                 
                 const flightPanner = audioCtx.createPanner();
-                flightPanner.panningModel = 'HRTF'; 
+                flightPanner.panningModel = 'equalpower'; // 💡 HRTF 헤드 그림자 효과 삭제, 100% 무결점 스테레오 패닝 적용
                 flightPanner.distanceModel = 'exponential'; 
                 flightPanner.rolloffFactor = 1.0; 
-                // 💡 공간감 상실(전역화) 방지: 최대 거리를 50m로 대폭 늘려 포수 미트 너머까지 지향성 유지
+                flightPanner.refDistance = 1; 
                 flightPanner.maxDistance = 50; 
                 
                 const flightVolNode = audioCtx.createGain();
@@ -345,18 +349,20 @@
 
                 let startX = !isLeftBatter ? -18 : 18; 
                 let endX = !isLeftBatter ? 1.5 : -1.5;
-                // 💡 공이 포수 미트(endX)를 뚫고 등 뒤 허공(extendedX)까지 지나가도록 연장
-                let extendedX = !isLeftBatter ? 4.5 : -4.5;
 
                 flightSrc.connect(pianoEnvelope); pianoEnvelope.connect(flightPanner);
                 flightNoiseSrc.connect(noiseFilter); noiseFilter.connect(noiseEnvelope); noiseEnvelope.connect(flightPanner);
                 flightPanner.connect(flightVolNode); flightVolNode.connect(audioCtx.destination);
 
                 flightPanner.positionX.setValueAtTime(startX, startTime);
-                // 💡 미트 도달 시점(flightTime)을 지나 허공(extendedFlightTime)까지 끊김 없이 비행
-                flightPanner.positionX.linearRampToValueAtTime(extendedX, startTime + extendedFlightTime);
+                flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
+                // 💡 미트 관통 방지: 0.1초 동안 소리가 겹쳐서 페이드아웃 될 때, X축이 뒤로 넘어가지 않고 미트 위치에 그대로 정지
+                flightPanner.positionX.setValueAtTime(endX, startTime + extendedFlightTime);
+
                 flightPanner.positionY.setValueAtTime(2.0, startTime);
-                flightPanner.positionY.linearRampToValueAtTime(actualY, startTime + extendedFlightTime);
+                flightPanner.positionY.linearRampToValueAtTime(actualY, startTime + flightTime);
+                flightPanner.positionY.setValueAtTime(actualY, startTime + extendedFlightTime);
+
                 flightPanner.positionZ.value = actualZ; 
 
                 flightSrc.start(startTime); flightNoiseSrc.start(startTime);
@@ -368,7 +374,7 @@
                 activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
 
                 const impactPanner = audioCtx.createPanner();
-                impactPanner.panningModel = 'HRTF'; 
+                impactPanner.panningModel = 'equalpower'; // 💡 미트 소리도 완벽한 스테레오 패닝 적용
                 impactPanner.distanceModel = 'exponential'; 
                 impactPanner.rolloffFactor = 1.5; 
                 impactPanner.refDistance = 1; 
