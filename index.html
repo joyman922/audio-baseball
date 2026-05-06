@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (3단계 고정 시점 & 1.3m 극대화 패치)</title>
+    <title>리얼 야구 (사운드 무결점 루프 & 0.8m 타석 고정 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -19,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (시점 중앙 고정 & 1.3m 타석 이동 패치)</h1>
+    <h1>리얼 야구 (투구음 끊김 방지 & 3단계 타석 패치)</h1>
     
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
@@ -91,7 +91,7 @@
         
         let activeNodes = [];
         
-        // 💡 타석 3단계 압축 (-1, 0, 1)
+        // 💡 3단계로 압축. 중앙에서 앞뒤로 0.8m씩 움직임. (포수와 겹치는 현상 해결)
         let boxStep = 0; 
         const boxNames = {"-1": "타석 앞", "0": "타석 중앙", "1": "타석 뒤"};
         let actualY, actualZ; 
@@ -111,7 +111,7 @@
                     if (node.type === 'pitch') {
                         node.gain.cancelScheduledValues(now);
                         node.gain.setValueAtTime(node.gain.value, now);
-                        // 타격 시 0.01초 즉각 소멸 (관통 방지 유지)
+                        // 0.01초 즉각 정지 (타격 관통 방지)
                         node.gain.linearRampToValueAtTime(0.001, now + 0.01); 
                         node.src.stop(now + 0.01); 
                     } else if (node.type === 'mitt') {
@@ -128,7 +128,7 @@
         }
 
         function updateListenerPosition() {
-            // 💡 시점(귀)의 X좌표는 무조건 0(중앙)으로 고정!
+            // 💡 시점(귀)의 X축은 항상 중앙(0)으로 고정. Z축(깊이)만 타석으로 분리.
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             
             if(audioCtx.listener.positionX) {
@@ -146,8 +146,8 @@
             panner.distanceModel = 'linear';
             panner.refDistance = 1; panner.maxDistance = 25; panner.rolloffFactor = 1;
 
-            // 💡 발소리는 내 아바타가 이동한 1.3m 위치에서 발생
-            let avatarX = boxStep * 1.3;
+            // 💡 발소리 위치를 타석 앞뒤 0.8m로 수정
+            let avatarX = isLeftBatter ? (boxStep * -0.8) : (boxStep * 0.8);
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             
             panner.positionX.value = avatarX;
@@ -308,6 +308,7 @@
             setTimeout(() => {
                 const startTime = audioCtx.currentTime + 0.05; 
                 const flightTime = 0.42; 
+                // 페이드아웃 되는 0.1초 동안 궤적을 벗어나지 않도록 시간 계산
                 const extendedFlightTime = flightTime + 0.1; 
                 const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
                 
@@ -315,6 +316,8 @@
                 if (pitchBuffer) {
                     flightSrc = audioCtx.createBufferSource();
                     flightSrc.buffer = pitchBuffer;
+                    // 💡 핵심 패치 1: 웨이브 파일의 재생 시간이 짧아 중간에 증발하던 문제 원천 차단 (무한 루프 부여)
+                    flightSrc.loop = true;
                 } else {
                     flightSrc = audioCtx.createOscillator();
                     flightSrc.type = "sine"; 
@@ -325,12 +328,14 @@
                 pianoEnvelope.gain.setValueAtTime(0, startTime);
                 pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
                 
+                // 미트에 도달한 뒤 0.1초 동안 자연스럽게 겹치며 사라짐
                 pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
                 pianoEnvelope.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.1);
                 pianoEnvelope.gain.linearRampToValueAtTime(0, startTime + flightTime + 0.12);
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
-                flightNoiseSrc.buffer = noiseBuffer; flightNoiseSrc.loop = true; 
+                flightNoiseSrc.buffer = noiseBuffer; 
+                flightNoiseSrc.loop = true; 
                 
                 const noiseFilter = audioCtx.createBiquadFilter();
                 noiseFilter.type = "bandpass"; noiseFilter.frequency.value = targetFreq; 
@@ -353,6 +358,12 @@
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = aimZ_obj.vol; 
 
+                // 귀의 위치는 중앙 고정!
+                let currentListenerZ = isLeftBatter ? -3.5 : 3.5;
+                audioCtx.listener.positionX.value = 0; 
+                audioCtx.listener.positionY.value = 1.62; 
+                audioCtx.listener.positionZ.value = currentListenerZ; 
+
                 let startX = !isLeftBatter ? -18 : 18; 
                 let endX = !isLeftBatter ? 1.5 : -1.5;
 
@@ -362,6 +373,7 @@
 
                 flightPanner.positionX.setValueAtTime(startX, startTime);
                 flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
+                // 포수 등에 꽂힌 순간 X축 정지 (관통 방지)
                 flightPanner.positionX.setValueAtTime(endX, startTime + extendedFlightTime);
 
                 flightPanner.positionY.setValueAtTime(2.0, startTime);
@@ -425,7 +437,7 @@
                 pitchTimeout = setTimeout(() => {
                     if (!hasSwung) {
                         if (isBunting) {
-                            let avatarX = boxStep * 1.3;
+                            let avatarX = isLeftBatter ? (boxStep * -0.8) : (boxStep * 0.8);
                             playSwingSound(avatarX, actualY, actualZ); 
                             speak("헛스윙! 번트 자세를 빼지 않아 스윙 처리됩니다.");
                             isBunting = false; 
@@ -453,13 +465,13 @@
 
             const swingTime = performance.now() - pitchStartTime;
             
-            // 💡 타석 앞/뒤 1.3m 이동 반영 (1.3m는 비행 속도상 약 28ms의 타이밍 차이를 만듦)
-            const perfectTime = 370 + (boxStep * 28); 
+            // 💡 0.8m 이동에 맞춘 물리적 타이밍 완벽 동기화 (1칸당 17ms 보정)
+            const perfectTime = 370 + (boxStep * 17); 
             
-            let audioHitX = boxStep * 1.3;
+            let audioHitX = isLeftBatter ? (boxStep * -0.8) : (boxStep * 0.8);
             const timeDiff = Math.abs(swingTime - perfectTime);
             
-            // 💡 원래 치던 타격 범위(±45ms 내외)를 동일하게 유지하여 타격감 무결점 보존
+            // 💡 타자가 이동한 위치를 중심으로 기존의 타격 범위(±45ms)를 완전히 동일하게 보장
             if (timeDiff > 45) {
                 playSwingSound(audioHitX, actualY, actualZ); 
                 speak("헛스윙! 거리가 맞지 않습니다.");
@@ -499,7 +511,6 @@
         function moveForward() { 
             if(boxStep > -1) { 
                 boxStep--; 
-                // 시점은 고정되어 있으므로 별도 호출 생략 가능하지만 구조 유지를 위해 호출
                 updateListenerPosition();
                 playWalkSound();
                 speak(boxNames[boxStep]); 
