@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (황금 밸런스 & 완벽한 사운드 믹싱 패치)</title>
+    <title>리얼 야구 (사운드 무결성 & 타석 공간감 완벽 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -19,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (1m/2m 황금비율 코스 & 사운드 심리스 패치)</h1>
+    <h1>리얼 야구 (끊김 없는 피칭 & 0.7m 타석 이동 패치)</h1>
     
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
@@ -173,7 +173,6 @@
             
             stopAllActiveNodes(); 
 
-            // 💡 개발자님의 요구사항을 반영한 황금 비율 9가지 코스 (C#과 D# 추가, 볼륨 1.1)
             const zBases = [
                 { name: "사구(A)", val: 6, noteIdx: 0, vol: 0.4 },             
                 { name: "몸쪽 유인구(A#)", val: 4, noteIdx: 1, vol: 0.5 },   
@@ -186,24 +185,15 @@
                 { name: "완전 빠진볼(G)", val: -6, noteIdx: 10, vol: 0.4 }      
             ];
             
-            // 💡 투구 확률 밸런싱 (가운데와 스트라이크존 근처의 출현 빈도를 높임)
             const targetZPool = [
-                ...Array(1).fill(zBases[0]), // A
-                ...Array(3).fill(zBases[1]), // A#
-                ...Array(5).fill(zBases[2]), // C
-                ...Array(5).fill(zBases[3]), // C#
-                ...Array(6).fill(zBases[4]), // D
-                ...Array(5).fill(zBases[5]), // D#
-                ...Array(5).fill(zBases[6]), // E
-                ...Array(3).fill(zBases[7]), // F#
-                ...Array(1).fill(zBases[8])  // G
+                ...Array(1).fill(zBases[0]), ...Array(3).fill(zBases[1]), ...Array(5).fill(zBases[2]), 
+                ...Array(5).fill(zBases[3]), ...Array(6).fill(zBases[4]), ...Array(5).fill(zBases[5]), 
+                ...Array(5).fill(zBases[6]), ...Array(3).fill(zBases[7]), ...Array(1).fill(zBases[8])  
             ];
 
             const yBases = [
-                { name: "낮은 볼", val: 0.1, octIdx: 0 }, 
-                { name: "낮은 코스", val: 0.55, octIdx: 1 }, 
-                { name: "중간 높이", val: 0.75, octIdx: 2 }, 
-                { name: "높은 코스", val: 0.95, octIdx: 3 }, 
+                { name: "낮은 볼", val: 0.1, octIdx: 0 }, { name: "낮은 코스", val: 0.55, octIdx: 1 }, 
+                { name: "중간 높이", val: 0.75, octIdx: 2 }, { name: "높은 코스", val: 0.95, octIdx: 3 }, 
                 { name: "높은 볼", val: 1.4, octIdx: 4 }     
             ];
 
@@ -219,8 +209,6 @@
             actualZ = aimZ_obj.val + errorZ; actualY = aimY_obj.val + errorY;
 
             isStrike = (actualY <= zoneTop && actualY >= zoneBottom && actualZ <= zoneInside && actualZ >= zoneOutside);
-            
-            // 💡 A음(0)과 G음(10)만 포수가 못 잡고 뒤로 빠뜨리는 폭투 판정
             let isWildPitch = (aimZ_obj.noteIdx === 0 || aimZ_obj.noteIdx === 10); 
 
             let call = isStrike ? "스트라이크! " : "볼! ";
@@ -247,7 +235,8 @@
 
             setTimeout(() => {
                 const startTime = audioCtx.currentTime + 0.05; 
-                const flightTime = 0.4; 
+                // 💡 투구 비행 시간을 미트 도달 시점까지 정확히 0.42초로 고정
+                const flightTime = 0.42; 
                 const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
                 
                 let flightSrc;
@@ -264,9 +253,9 @@
                 pianoEnvelope.gain.setValueAtTime(0, startTime);
                 pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
                 
-                // 💡 사운드 뚝 끊김 해결 (Crossfade): 미트 소리와 자연스럽게 겹치도록 0.1초 동안 페이드아웃
-                pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                pianoEnvelope.gain.exponentialRampToValueAtTime(0.001, startTime + flightTime + 0.1);
+                // 💡 끊김 원천 차단: 공은 미트 소리가 들린 직후(flightTime + 0.01)까지 볼륨 100%를 유지하다가 사라집니다.
+                pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime + 0.01);
+                pianoEnvelope.gain.exponentialRampToValueAtTime(0.001, startTime + flightTime + 0.08);
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; flightNoiseSrc.loop = true; 
@@ -278,9 +267,9 @@
                 noiseEnvelope.gain.setValueAtTime(0, startTime);
                 noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
                 
-                // 💡 노이즈 역시 부드럽게 크로스페이드
-                noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                noiseEnvelope.gain.exponentialRampToValueAtTime(0.001, startTime + flightTime + 0.1);
+                // 💡 노이즈(바람 가르는 소리)도 미트에 꽂힐 때까지 절대 끊기지 않음
+                noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime + 0.01);
+                noiseEnvelope.gain.exponentialRampToValueAtTime(0.001, startTime + flightTime + 0.08);
                 
                 const flightPanner = audioCtx.createPanner();
                 flightPanner.panningModel = 'HRTF'; flightPanner.refDistance = 1; flightPanner.maxDistance = 15; 
@@ -288,9 +277,11 @@
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = aimZ_obj.vol; 
 
-                // 💡 타석 이동 폭 0.4m (40cm)로 최적화. 귀로는 구분되지만 너무 앞에서 치는 이질감은 없앰
-                const batterOffsetX = isLeftBatter ? (boxStep * -0.4) : (boxStep * 0.4);
-                audioCtx.listener.positionX.value = batterOffsetX; audioCtx.listener.positionY.value = 1.62; audioCtx.listener.positionZ.value = 0;
+                // 💡 타석 이동 폭을 극적으로 넓힘 (1칸당 0.7m, 최대 ±1.4m 이동)
+                const batterOffsetX = isLeftBatter ? (boxStep * -0.7) : (boxStep * 0.7);
+                audioCtx.listener.positionX.value = batterOffsetX; 
+                audioCtx.listener.positionY.value = 1.62; 
+                audioCtx.listener.positionZ.value = 0;
 
                 let startX = !isLeftBatter ? -18 : 18; let endX = !isLeftBatter ? 1.5 : -1.5;
 
@@ -306,17 +297,12 @@
 
                 flightSrc.start(startTime); flightNoiseSrc.start(startTime);
                 
-                // 💡 페이드아웃 꼬리가 완전히 사라질 때까지 노드를 넉넉히 유지
-                flightSrc.stop(startTime + flightTime + 0.15); 
-                flightNoiseSrc.stop(startTime + flightTime + 0.15); 
-                
+                // 💡 강제로 소리를 자르던 .stop() 명령어를 영구 삭제. envelope가 자연스럽게 볼륨을 0으로 만듦.
                 activeNodes.push(flightSrc, flightNoiseSrc); 
 
-                // 💡 미트 소리 panner: Z축 위치를 실제 공이 날아간 곳(actualZ)으로 완벽하게 동기화
                 const impactPanner = audioCtx.createPanner();
                 impactPanner.panningModel = 'HRTF'; impactPanner.positionX.value = endX; impactPanner.positionY.value = actualY; impactPanner.positionZ.value = actualZ;
 
-                // 💡 A음, G음만 포수가 놓친 것으로 판정
                 if (isWildPitch) {
                     const dirtOsc = audioCtx.createOscillator();
                     const dirtGain = audioCtx.createGain();
@@ -327,7 +313,6 @@
                     dirtOsc.start(startTime + flightTime); dirtOsc.stop(startTime + flightTime + 0.2);
                     activeNodes.push(dirtOsc);
                 } else {
-                    // 💡 그 외 모든 공은 glove 소리로 출력
                     const r = Math.floor(Math.random() * 3) + 1;
                     if (audioBuffers[`glove${r}`]) {
                         const mittSrc = audioCtx.createBufferSource();
@@ -381,19 +366,29 @@
             }
 
             const swingTime = performance.now() - pitchStartTime;
-            // 💡 보폭 간격(0.4m)에 맞추어 타이밍 보정치도 10ms 단위로 정밀하게 연결
-            const perfectTime = 370 + (boxStep * 10); 
             
-            // 💡 스윙 및 타격 소리의 위치를 타자의 현재 청취자(Listener) 위치와 완벽히 동기화
+            // 💡 타석(0.7m) 이동에 따른 타격 싱크 완벽 동기화 (1칸당 18ms 보정)
+            // 맨 앞(-2)일 경우 타격 시점이 매우 빨라지고, 맨 뒤(2)일 경우 공을 오래 기다려야 함.
+            const perfectTime = 370 + (boxStep * 18); 
+            
             let audioHitX = audioCtx.listener.positionX.value;
+            
+            // 💡 스윙 가능 범위 제한 (물리적 한계 구현)
+            // 현재 타자가 서 있는 위치(perfectTime)를 기준으로 공이 ±35ms (약 1.5칸) 이상 앞이나 뒤에 있으면
+            // 방망이가 아예 닿지 않는 "헛스윙 (타이밍 맞지 않음)"으로 강제 처리합니다.
+            const timeDiff = Math.abs(swingTime - perfectTime);
+            
+            if (timeDiff > 35) {
+                playSwingSound(audioHitX, actualY, actualZ); 
+                speak("헛스윙! 거리가 맞지 않습니다.");
+                return;
+            }
             
             if (!isStrike) {
                 playSwingSound(audioHitX, actualY, actualZ); 
                 speak("헛스윙! 볼에 속았습니다.");
                 return; 
             }
-            
-            const timeDiff = Math.abs(swingTime - perfectTime);
             
             const hitThreshold = currentBuntState ? 35 : 20;
             const foulThreshold = currentBuntState ? 60 : 45;
