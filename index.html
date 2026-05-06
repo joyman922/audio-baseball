@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>리얼 야구 (1m 단위 정밀 타격 & 번트 시스템)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        textarea {
+            width: 100%; height: 150px; font-size: 18px;
+            padding: 10px; margin-bottom: 20px;
+            background-color: #f0f0f0; cursor: default;
+        }
+        button { padding: 10px 20px; font-size: 16px; margin-right: 10px; margin-bottom: 10px; }
+        .sr-only {
+            position: absolute; width: 1px; height: 1px;
+            margin: -1px; padding: 0; overflow: hidden;
+            clip: rect(0, 0, 0, 0); border: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>리얼 야구 (1m 정밀 피칭 & 번트 패치)</h1>
+    
+    <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
+
+    <label for="gameArea">야구 게임 컨트롤 창</label>
+    <textarea id="gameArea" readonly 
+        aria-label="엔터 투구, 스페이스 스윙, 위 방향키 번트 자세 토글, C 타석 변경, 좌/우 방향키 이동, 아래 방향키 위치 확인">여기에 포커스를 맞추고 플레이하세요.
+- 엔터: 투구 
+- 스페이스바: 스윙 / 타격
+- 위(Up) 방향키: 번트 자세 토글
+- C 키: 좌/우타석 변경
+- 좌/우 방향키: 타석 내 앞/뒤 이동</textarea>
+
+    <div>
+        <button id="btnSwitch" tabindex="0">타석 변경</button>
+        <button id="btnPitch" tabindex="0">투구</button>
+    </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const audioBuffers = {}; 
+        const pitchBufferCache = {}; 
+        
+        // 💡 모든 오디오 에셋 매핑
+        const SOUND_URLS = { 
+            hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
+            glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
+            foul1: "foul1.ogg", bunt: "bunt.ogg",
+            swing1: "swing1.ogg", swing2: "swing2.ogg"
+        }; 
+
+        async function loadSound(name, url) {
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    const arrayBuffer = await response.arrayBuffer();
+                    audioBuffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
+                }
+            } catch (e) {
+                console.log(`[${name}] 파일 로드 실패. 대체음을 사용합니다.`);
+            }
+        }
+        for (let key in SOUND_URLS) {
+            loadSound(key, SOUND_URLS[key]);
+        }
+
+        function createNoiseBuffer() {
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+            return buffer;
+        }
+        const noiseBuffer = createNoiseBuffer();
+
+        const baseFrequencies = [220.00, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00];
+        function getPianoFrequency(noteIndex, octaveIndex) {
+            return baseFrequencies[noteIndex] * Math.pow(2, octaveIndex - 2);
+        }
+
+        const zoneTop = 1.05; const zoneBottom = 0.50; 
+        const zoneInside = 3.5; const zoneOutside = -3.5; // 💡 1m 간격 스트라이크 존
+
+        let isLeftBatter = false; 
+        let isPitching = false;
+        let hasSwung = false; 
+        let isBunting = false; // 번트 상태 변수
+        let pitchStartTime = 0;
+        let pitchTimeout;
+        
+        let activeNodes = [];
+        
+        let boxStep = 0; 
+        const boxNames = {"-2": "타석 맨 앞", "-1": "타석 앞쪽", "0": "타석 중앙", "1": "타석 뒤쪽", "2": "타석 맨 뒤"};
+        let actualY, actualZ; 
+        let isStrike = false; 
+        let pitchResultText = "";
+
+        const announcer = document.getElementById("ariaAnnouncer");
+        function speak(text) {
+            announcer.textContent = ""; 
+            setTimeout(() => { announcer.textContent = text; }, 50);
+        }
+
+        function stopAllActiveNodes() {
+            activeNodes.forEach(node => { try { node.stop(); } catch(e) {} });
+            activeNodes = [];
+        }
+
+        // 💡 스윙 사운드
+        function playSwingSound() {
+            const r = Math.floor(Math.random() * 2) + 1;
+            if (audioBuffers[`swing${r}`]) {
+                const src = audioCtx.createBufferSource();
+                src.buffer = audioBuffers[`swing${r}`];
+                src.connect(audioCtx.destination);
+                src.start();
+            }
+        }
+
+        // 💡 타격음 (일반 & 번트 분기)
+        function playHitSound(x, y, z) {
+            const panner = audioCtx.createPanner();
+            panner.panningModel = 'HRTF'; panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
+
+            let bufferName = isBunting ? "bunt" : `hit${Math.floor(Math.random() * 3) + 1}`;
+            
+            if (audioBuffers[bufferName]) {
+                const source = audioCtx.createBufferSource();
+                source.buffer = audioBuffers[bufferName];
+                source.connect(panner); panner.connect(audioCtx.destination);
+                source.start();
+            } else {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.type = "square"; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.connect(panner); panner.connect(gainNode); gainNode.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+            }
+        }
+
+        function playFoulSound(x, y, z) {
+            const panner = audioCtx.createPanner();
+            panner.panningModel = 'HRTF'; panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
+
+            let bufferName = "foul1";
+            if (audioBuffers[bufferName]) {
+                const source = audioCtx.createBufferSource();
+                source.buffer = audioBuffers[bufferName];
+                source.connect(panner); panner.connect(audioCtx.destination);
+                source.start();
+            } else {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.type = "sine"; osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.05);
+                gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.connect(panner); panner.connect(gainNode); gainNode.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+            }
+        }
+
+        async function throwBall() {
+            if (isPitching) return;
+            isPitching = true;
+            hasSwung = false; 
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            stopAllActiveNodes(); 
+
+            // 💡 1m 간격 Z축 배분 & 볼륨 조정 완료
+            const targetZOptions = [
+                { name: "사구(A)", val: 5, noteIdx: 0, vol: 0.4 },             
+                { name: "몸쪽 깊은 유인구(A#)", val: 4, noteIdx: 1, vol: 0.5 },   
+                { name: "몸쪽 걸치는 스트라이크(B)", val: 3, noteIdx: 2, vol: 0.6 },  
+                { name: "몸쪽 꽉찬 스트라이크(C)", val: 2, noteIdx: 3, vol: 0.75 }, 
+                { name: "몸쪽-가운데 사이(C#)", val: 1, noteIdx: 4, vol: 1.1 },    
+                { name: "정중앙 한가운데(D)", val: 0, noteIdx: 5, vol: 1.5 },      
+                { name: "가운데-바깥쪽 사이(D#)", val: -1, noteIdx: 6, vol: 1.1 },   
+                { name: "바깥쪽 꽉찬 스트라이크(E)", val: -2, noteIdx: 7, vol: 0.75 }, 
+                { name: "바깥쪽 걸치는 스트라이크(F)", val: -3, noteIdx: 8, vol: 0.6 },  
+                { name: "바깥쪽 유인구(F#)", val: -4, noteIdx: 9, vol: 0.5 },    
+                { name: "완전 빠진볼(G)", val: -5, noteIdx: 10, vol: 0.4 }      
+            ];
+            const targetYOptions = [
+                { name: "낮은 볼", val: 0.1, octIdx: 0 }, { name: "낮은 코스", val: 0.55, octIdx: 1 }, { name: "중간 높이", val: 0.75, octIdx: 2 }, { name: "높은 코스", val: 0.95, octIdx: 3 }, { name: "높은 볼", val: 1.4, octIdx: 4 }     
+            ];
+
+            let aimZ_obj = targetZOptions[Math.floor(Math.random() * targetZOptions.length)];
+            let aimY_obj = targetYOptions[Math.floor(Math.random() * targetYOptions.length)];
+
+            let errorZ = (Math.random() * 0.2) - 0.1; let errorY = (Math.random() * 0.1) - 0.05; 
+            actualZ = aimZ_obj.val + errorZ; actualY = aimY_obj.val + errorY;
+
+            isStrike = (actualY <= zoneTop && actualY >= zoneBottom && actualZ <= zoneInside && actualZ >= zoneOutside);
+            let isDirtBall = (actualY <= 0.2); 
+
+            let call = isStrike ? "스트라이크! " : "볼! ";
+            pitchResultText = call + aimZ_obj.name + " " + aimY_obj.name + "입니다.";
+
+            let midiNote = 60 + (aimZ_obj.noteIdx - 3) + ((aimY_obj.octIdx - 2) * 12);
+            let pitchBuffer = null;
+            
+            if (pitchBufferCache[midiNote] && pitchBufferCache[midiNote] !== "loading") {
+                pitchBuffer = pitchBufferCache[midiNote];
+            } else {
+                try {
+                    let response = await fetch(`./${midiNote}-2L-1.wav`);
+                    if (response.ok) {
+                        pitchBuffer = await audioCtx.decodeAudioData(await response.arrayBuffer());
+                        pitchBufferCache[midiNote] = pitchBuffer; 
+                    }
+                } catch(e) {
+                    console.log(`[${midiNote}-2L-1.wav] 파일 로드 실패. 대체 합성음을 사용합니다.`);
+                }
+            }
+
+            speak("와인드업");
+
+            setTimeout(() => {
+                const startTime = audioCtx.currentTime + 0.05; 
+                const flightTime = 0.4; 
+                const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
+                
+                let flightSrc;
+                if (pitchBuffer) {
+                    flightSrc = audioCtx.createBufferSource();
+                    flightSrc.buffer = pitchBuffer;
+                } else {
+                    flightSrc = audioCtx.createOscillator();
+                    flightSrc.type = "sine"; 
+                    flightSrc.frequency.value = targetFreq;
+                }
+                
+                const pianoEnvelope = audioCtx.createGain();
+                pianoEnvelope.gain.setValueAtTime(0, startTime);
+                pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
+
+                const flightNoiseSrc = audioCtx.createBufferSource();
+                flightNoiseSrc.buffer = noiseBuffer; flightNoiseSrc.loop = true; 
+                
+                const noiseFilter = audioCtx.createBiquadFilter();
+                noiseFilter.type = "bandpass"; noiseFilter.frequency.value = targetFreq; 
+
+                const noiseEnvelope = audioCtx.createGain();
+                noiseEnvelope.gain.setValueAtTime(0, startTime);
+                noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
+                
+                const flightPanner = audioCtx.createPanner();
+                flightPanner.panningModel = 'HRTF'; flightPanner.refDistance = 1; flightPanner.maxDistance = 15; 
+                
+                const flightVolNode = audioCtx.createGain();
+                flightVolNode.gain.value = aimZ_obj.vol; 
+
+                const batterOffsetX = isLeftBatter ? (boxStep * -0.1) : (boxStep * 0.1);
+                audioCtx.listener.positionX.value = batterOffsetX; audioCtx.listener.positionY.value = 1.62; audioCtx.listener.positionZ.value = 0;
+
+                let startX = !isLeftBatter ? -18 : 18; let endX = !isLeftBatter ? 1.5 : -1.5;
+
+                flightSrc.connect(pianoEnvelope); pianoEnvelope.connect(flightPanner);
+                flightNoiseSrc.connect(noiseFilter); noiseFilter.connect(noiseEnvelope); noiseEnvelope.connect(flightPanner);
+                flightPanner.connect(flightVolNode); flightVolNode.connect(audioCtx.destination);
+
+                flightPanner.positionX.setValueAtTime(startX, startTime);
+                flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
+                flightPanner.positionY.setValueAtTime(2.0, startTime);
+                flightPanner.positionY.linearRampToValueAtTime(actualY, startTime + flightTime);
+                flightPanner.positionZ.value = actualZ; 
+
+                flightSrc.start(startTime); flightNoiseSrc.start(startTime);
+                
+                // 💡 공백 없이 미트 소리와 완벽하게 맞물리기 위해 정확한 시간에 공 소리를 절단
+                flightSrc.stop(startTime + flightTime); 
+                flightNoiseSrc.stop(startTime + flightTime); 
+                
+                activeNodes.push(flightSrc, flightNoiseSrc); 
+
+                // 💡 미트(포구) 사운드
+                const impactPanner = audioCtx.createPanner();
+                impactPanner.panningModel = 'HRTF'; impactPanner.positionX.value = endX; impactPanner.positionY.value = actualY; impactPanner.positionZ.value = actualZ;
+
+                if (isDirtBall) {
+                    const dirtOsc = audioCtx.createOscillator();
+                    const dirtGain = audioCtx.createGain();
+                    dirtOsc.type = "sine"; dirtOsc.frequency.setValueAtTime(100, startTime + flightTime);
+                    dirtGain.gain.setValueAtTime(1, startTime + flightTime);
+                    dirtGain.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.2);
+                    dirtOsc.connect(impactPanner); impactPanner.connect(dirtGain); dirtGain.connect(audioCtx.destination);
+                    dirtOsc.start(startTime + flightTime); dirtOsc.stop(startTime + flightTime + 0.2);
+                    activeNodes.push(dirtOsc);
+                } else {
+                    const r = Math.floor(Math.random() * 3) + 1;
+                    if (audioBuffers[`glove${r}`]) {
+                        const mittSrc = audioCtx.createBufferSource();
+                        mittSrc.buffer = audioBuffers[`glove${r}`];
+                        const mittGain = audioCtx.createGain();
+                        mittGain.gain.value = aimZ_obj.vol + 0.3; // 💡 공 소리보다 30 증폭
+                        mittSrc.connect(impactPanner); impactPanner.connect(mittGain); mittGain.connect(audioCtx.destination);
+                        mittSrc.start(startTime + flightTime);
+                        activeNodes.push(mittSrc);
+                    } else {
+                        // fallback oscillator
+                        const mittOsc = audioCtx.createOscillator();
+                        const mittGain = audioCtx.createGain();
+                        mittOsc.type = "triangle"; mittOsc.frequency.setValueAtTime(150, startTime + flightTime);
+                        mittOsc.frequency.exponentialRampToValueAtTime(40, startTime + flightTime + 0.15);
+                        mittGain.gain.setValueAtTime(aimZ_obj.vol + 0.3, startTime + flightTime);
+                        mittGain.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.15);
+                        mittOsc.connect(impactPanner); impactPanner.connect(mittGain); mittGain.connect(audioCtx.destination);
+                        mittOsc.start(startTime + flightTime); mittOsc.stop(startTime + flightTime + 0.15);
+                        activeNodes.push(mittOsc);
+                    }
+                }
+
+                pitchStartTime = performance.now() + 50; 
+
+                pitchTimeout = setTimeout(() => {
+                    if (!hasSwung) {
+                        // 💡 번트 자세를 풀지 않고 홈플레이트를 지났을 때 자동 스윙 판정
+                        if (isBunting) {
+                            playSwingSound();
+                            speak("헛스윙! 번트 자세를 빼지 않아 스윙 처리됩니다.");
+                        } else {
+                            speak(pitchResultText); 
+                        }
+                    }
+                }, (flightTime + 0.05) * 1000); 
+
+                setTimeout(() => { isPitching = false; }, (flightTime + 0.5) * 1000);
+
+            }, 1000);
+        }
+
+        function swingBat() {
+            if (!isPitching) { speak("빈스윙"); return; }
+            if (hasSwung) return; 
+            
+            hasSwung = true; 
+            playSwingSound(); // 💡 스윙 시 즉시 스윙 사운드 출력
+
+            const swingTime = performance.now() - pitchStartTime;
+            const perfectTime = 370 + (boxStep * 15); 
+            let audioHitX = isLeftBatter ? (boxStep * -2.0) : (boxStep * 2.0);
+            
+            if (!isStrike) {
+                speak("헛스윙! 볼에 속았습니다.");
+                return; 
+            }
+            
+            const timeDiff = Math.abs(swingTime - perfectTime);
+
+            if (timeDiff <= 20) {
+                stopAllActiveNodes(); 
+                clearTimeout(pitchTimeout); 
+                isPitching = false; 
+                playHitSound(audioHitX, actualY, actualZ); 
+                speak(isBunting ? "번트 성공!" : "딱 정타!");
+            } else if (timeDiff > 20 && timeDiff <= 45) {
+                stopAllActiveNodes(); 
+                clearTimeout(pitchTimeout); 
+                isPitching = false; 
+                playFoulSound(audioHitX, actualY, actualZ); 
+                speak("틱! 파울입니다.");
+            } else if (swingTime < perfectTime) {
+                speak("헛스윙! 빠름"); 
+            } else {
+                speak("헛스윙! 늦음");
+            }
+        }
+
+        function moveForward() { if(boxStep > -2) { boxStep--; speak(boxNames[boxStep]); } else { speak("더 이상 투수 쪽으로 갈 수 없습니다"); } }
+        function moveBackward() { if(boxStep < 2) { boxStep++; speak(boxNames[boxStep]); } else { speak("더 이상 포수 쪽으로 갈 수 없습니다"); } }
+
+        const gameArea = document.getElementById("gameArea");
+        gameArea.addEventListener("keydown", function(e) {
+            if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.code) || e.key.toLowerCase() === 'c') {
+                e.preventDefault(); 
+            }
+            if (e.code === "Space") swingBat(); 
+            else if (e.code === "Enter") throwBall(); 
+            else if (e.code === "ArrowUp") { 
+                isBunting = !isBunting;
+                speak(isBunting ? "번트 자세" : "번트 자세 해제");
+            }
+            else if (e.key.toLowerCase() === "c") {
+                isLeftBatter = !isLeftBatter;
+                boxStep = 0; 
+                speak((isLeftBatter ? "좌타석" : "우타석") + ", 타석 중앙입니다.");
+            } 
+            else if (e.code === "ArrowLeft") { if (!isLeftBatter) moveForward(); else moveBackward(); } 
+            else if (e.code === "ArrowRight") { if (!isLeftBatter) moveBackward(); else moveForward(); }
+            else if (e.code === "ArrowDown") { speak("현재 " + boxNames[boxStep] + "입니다"); }
+        });
+
+        document.getElementById("btnPitch").addEventListener("click", throwBall);
+        document.getElementById("btnSwitch").addEventListener("click", function() {
+            const e = new KeyboardEvent("keydown", {key: "c"});
+            gameArea.dispatchEvent(e);
+        });
+
+        function preloadAllPitches() {
+            const zOpts = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; 
+            const yOpts = [0, 1, 2, 3, 4]; 
+            
+            for (let z of zOpts) {
+                for (let y of yOpts) {
+                    let midiNote = 60 + (z - 3) + ((y - 2) * 12);
+                    if (!pitchBufferCache[midiNote]) {
+                        pitchBufferCache[midiNote] = "loading";
+                        fetch(`./${midiNote}-2L-1.wav`).then(async res => {
+                            if (res.ok) {
+                                let arrayBuffer = await res.arrayBuffer();
+                                pitchBufferCache[midiNote] = await audioCtx.decodeAudioData(arrayBuffer);
+                            } else {
+                                pitchBufferCache[midiNote] = null;
+                            }
+                        }).catch(e => { pitchBufferCache[midiNote] = null; });
+                    }
+                }
+            }
+        }
+        
+        preloadAllPitches();
+    </script>
+</body>
+</html>
