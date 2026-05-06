@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (사운드 무결점 루프 & 0.8m 타석 고정 패치)</title>
+    <title>리얼 야구 (사운드 무결점 루프 & 0.3m 타석 고정 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -91,7 +91,7 @@
         
         let activeNodes = [];
         
-        // 💡 3단계로 압축. 중앙에서 앞뒤로 0.8m씩 움직임. (포수와 겹치는 현상 해결)
+        // 💡 3단계로 압축. 중앙에서 앞뒤로 0.3m씩 움직임.
         let boxStep = 0; 
         const boxNames = {"-1": "타석 앞", "0": "타석 중앙", "1": "타석 뒤"};
         let actualY, actualZ; 
@@ -111,7 +111,6 @@
                     if (node.type === 'pitch') {
                         node.gain.cancelScheduledValues(now);
                         node.gain.setValueAtTime(node.gain.value, now);
-                        // 0.01초 즉각 정지 (타격 관통 방지)
                         node.gain.linearRampToValueAtTime(0.001, now + 0.01); 
                         node.src.stop(now + 0.01); 
                     } else if (node.type === 'mitt') {
@@ -128,7 +127,6 @@
         }
 
         function updateListenerPosition() {
-            // 💡 시점(귀)의 X축은 항상 중앙(0)으로 고정. Z축(깊이)만 타석으로 분리.
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             
             if(audioCtx.listener.positionX) {
@@ -146,8 +144,8 @@
             panner.distanceModel = 'linear';
             panner.refDistance = 1; panner.maxDistance = 25; panner.rolloffFactor = 1;
 
-            // 💡 발소리 위치를 타석 앞뒤 0.8m로 수정
-            let avatarX = isLeftBatter ? (boxStep * -0.8) : (boxStep * 0.8);
+            // 💡 발소리 위치를 타석 앞뒤 0.3m로 수정
+            let avatarX = isLeftBatter ? (boxStep * -0.3) : (boxStep * 0.3);
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             
             panner.positionX.value = avatarX;
@@ -308,15 +306,13 @@
             setTimeout(() => {
                 const startTime = audioCtx.currentTime + 0.05; 
                 const flightTime = 0.42; 
-                // 페이드아웃 되는 0.1초 동안 궤적을 벗어나지 않도록 시간 계산
-                const extendedFlightTime = flightTime + 0.1; 
+                const extendedFlightTime = flightTime + 0.15; 
                 const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
                 
                 let flightSrc;
                 if (pitchBuffer) {
                     flightSrc = audioCtx.createBufferSource();
                     flightSrc.buffer = pitchBuffer;
-                    // 💡 핵심 패치 1: 웨이브 파일의 재생 시간이 짧아 중간에 증발하던 문제 원천 차단 (무한 루프 부여)
                     flightSrc.loop = true;
                 } else {
                     flightSrc = audioCtx.createOscillator();
@@ -328,10 +324,11 @@
                 pianoEnvelope.gain.setValueAtTime(0, startTime);
                 pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.02); 
                 
-                // 미트에 도달한 뒤 0.1초 동안 자연스럽게 겹치며 사라짐
+                // 💡 수정됨: 미트에 도달한 시점(flightTime)부터 0.05초간 볼륨을 유지하고, 이후 0.05초간 서서히 감소 (총 0.1초 겹침)
                 pianoEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                pianoEnvelope.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.1);
-                pianoEnvelope.gain.linearRampToValueAtTime(0, startTime + flightTime + 0.12);
+                pianoEnvelope.gain.linearRampToValueAtTime(1.0, startTime + flightTime + 0.05);
+                pianoEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
+                pianoEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.12);
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; 
@@ -345,8 +342,9 @@
                 noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
                 
                 noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
-                noiseEnvelope.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.1);
-                noiseEnvelope.gain.linearRampToValueAtTime(0, startTime + flightTime + 0.12);
+                noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + flightTime + 0.05);
+                noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
+                noiseEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.12);
                 
                 const flightPanner = audioCtx.createPanner();
                 flightPanner.panningModel = 'equalpower'; 
@@ -358,7 +356,6 @@
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = aimZ_obj.vol; 
 
-                // 귀의 위치는 중앙 고정!
                 let currentListenerZ = isLeftBatter ? -3.5 : 3.5;
                 audioCtx.listener.positionX.value = 0; 
                 audioCtx.listener.positionY.value = 1.62; 
@@ -373,19 +370,16 @@
 
                 flightPanner.positionX.setValueAtTime(startX, startTime);
                 flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
-                // 포수 등에 꽂힌 순간 X축 정지 (관통 방지)
-                flightPanner.positionX.setValueAtTime(endX, startTime + extendedFlightTime);
 
                 flightPanner.positionY.setValueAtTime(2.0, startTime);
                 flightPanner.positionY.linearRampToValueAtTime(actualY, startTime + flightTime);
-                flightPanner.positionY.setValueAtTime(actualY, startTime + extendedFlightTime);
 
                 flightPanner.positionZ.value = actualZ; 
 
                 flightSrc.start(startTime); flightNoiseSrc.start(startTime);
                 
-                flightSrc.stop(startTime + extendedFlightTime + 0.1); 
-                flightNoiseSrc.stop(startTime + extendedFlightTime + 0.1); 
+                flightSrc.stop(startTime + extendedFlightTime); 
+                flightNoiseSrc.stop(startTime + extendedFlightTime); 
                 
                 activeNodes.push({ type: 'pitch', src: flightSrc, gain: pianoEnvelope });
                 activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
@@ -437,7 +431,7 @@
                 pitchTimeout = setTimeout(() => {
                     if (!hasSwung) {
                         if (isBunting) {
-                            let avatarX = isLeftBatter ? (boxStep * -0.8) : (boxStep * 0.8);
+                            let avatarX = isLeftBatter ? (boxStep * -0.3) : (boxStep * 0.3);
                             playSwingSound(avatarX, actualY, actualZ); 
                             speak("헛스윙! 번트 자세를 빼지 않아 스윙 처리됩니다.");
                             isBunting = false; 
@@ -465,13 +459,12 @@
 
             const swingTime = performance.now() - pitchStartTime;
             
-            // 💡 0.8m 이동에 맞춘 물리적 타이밍 완벽 동기화 (1칸당 17ms 보정)
-            const perfectTime = 370 + (boxStep * 17); 
+            // 💡 0.3m 이동에 맞춘 물리적 타이밍 완벽 동기화 (1칸당 7ms 보정)
+            const perfectTime = 370 + (boxStep * 7); 
             
-            let audioHitX = isLeftBatter ? (boxStep * -0.8) : (boxStep * 0.8);
+            let audioHitX = isLeftBatter ? (boxStep * -0.3) : (boxStep * 0.3);
             const timeDiff = Math.abs(swingTime - perfectTime);
             
-            // 💡 타자가 이동한 위치를 중심으로 기존의 타격 범위(±45ms)를 완전히 동일하게 보장
             if (timeDiff > 45) {
                 playSwingSound(audioHitX, actualY, actualZ); 
                 speak("헛스윙! 거리가 맞지 않습니다.");
