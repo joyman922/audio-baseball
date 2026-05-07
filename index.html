@@ -176,10 +176,12 @@
             return "뒤로 " + step + "칸";
         }
 
-        function getAvatarX() {
-            let moveOffset = isLeftBatter ? (boxStep * -0.1) : (boxStep * 0.1);
+function getAvatarX() {
+            // 한 칸당 0.45m 이동 (2칸 이동 시 최대 0.9m)
+            let moveOffset = isLeftBatter ? (boxStep * -0.45) : (boxStep * 0.45);
             return moveOffset;
         }
+
 
         function handleHitFadeOut() {
             const now = audioCtx.currentTime;
@@ -594,8 +596,8 @@
             }
         }
 
-        function moveForward() { 
-            if(boxStep > -9) { 
+function moveForward() { 
+            if(boxStep > -2) { 
                 boxStep--; 
                 updateListenerPosition();
                 playWalkSound();
@@ -605,8 +607,8 @@
             } 
         }
         
-function moveBackward() { 
-            if(boxStep < 9) { 
+        function moveBackward() { 
+            if(boxStep < 2) { 
                 boxStep++; 
                 updateListenerPosition();
                 playWalkSound();
@@ -616,42 +618,13 @@ function moveBackward() {
             } 
         }
 
-        // --- 여기서부터 새롭게 추가할 코드 ---
-        let isRightShiftDown = false; // 오른쪽 쉬프트가 눌렸는지 확인하는 변수
 
-        function jumpToBox(targetStep) {
-            if (boxStep === targetStep) {
-                speak("이미 " + getBoxName(boxStep) + "입니다");
-                return;
-            }
-            boxStep = targetStep;
-            updateListenerPosition();
-            playWalkSound();
-            speak(getBoxName(boxStep));
-        }
-        // --- 여기까지 ---
+
 
 const gameArea = document.getElementById("gameArea");
 
-        // --- 여기서부터 새롭게 추가할 코드 ---
-        gameArea.addEventListener("keyup", function(e) {
-            if (e.code === "ShiftRight") {
-                isRightShiftDown = false;
-            }
-        });
-        // --- 여기까지 ---
-
-
-
-
-
-gameArea.addEventListener("keydown", function(e) {
-            // 오른쪽 쉬프트를 누르고 있는 상태 감지
-            if (e.code === "ShiftRight") {
-                isRightShiftDown = true;
-            }
-
-            if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "ShiftRight"].includes(e.code) || e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'a') {
+        gameArea.addEventListener("keydown", function(e) {
+            if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.code) || e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'a') {
                 e.preventDefault(); 
             }
             
@@ -685,32 +658,19 @@ gameArea.addEventListener("keydown", function(e) {
             }
             else if (e.code === "ArrowLeft") { 
                 if (isPitching) return; 
-                if (isRightShiftDown) {
-                    // 오른쪽 쉬프트를 누른 채 좌측 방향키: 좌측 끝으로 점프
-                    jumpToBox(!isLeftBatter ? -9 : 9);
-                } else {
-                    if (!isLeftBatter) moveForward(); else moveBackward(); 
-                }
+                if (!isLeftBatter) moveForward(); else moveBackward(); 
             } 
             else if (e.code === "ArrowRight") { 
                 if (isPitching) return; 
-                if (isRightShiftDown) {
-                    // 오른쪽 쉬프트를 누른 채 우측 방향키: 우측 끝으로 점프
-                    jumpToBox(!isLeftBatter ? 9 : -9);
-                } else {
-                    if (!isLeftBatter) moveBackward(); else moveForward(); 
-                }
+                if (!isLeftBatter) moveBackward(); else moveForward(); 
             }
             else if (e.code === "ArrowDown") { 
                 if (isPitching) return;
-                if (isRightShiftDown) {
-                    // 오른쪽 쉬프트를 누른 채 아래 방향키: 타석 중앙으로 점프
-                    jumpToBox(0);
-                } else {
-                    speak("현재 " + getBoxName(boxStep) + "입니다"); 
-                }
+                speak("현재 " + getBoxName(boxStep) + "입니다"); 
             }
         });
+
+
 
 
         function preloadAllPitches() {
