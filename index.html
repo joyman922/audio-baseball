@@ -355,20 +355,31 @@
                 pianoEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
                 pianoEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.11);
 
+// 💡 구속에 따른 바람 소리(노이즈) 주파수 및 볼륨 자동 계산
+                // 1. 구속이 빠를수록 주파수(음역)가 높아집니다. (85마일=425Hz, 100마일=800Hz)
+                let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25); 
+                // 2. 구속이 빠를수록 바람 소리의 최대 볼륨이 커집니다. (85마일=0.625, 100마일=1.0)
+                let noisePeakVol = 0.5 + ((pitchSpeedMph - 80) * 0.025); 
+
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; 
                 flightNoiseSrc.loop = true; 
                 
                 const noiseFilter = audioCtx.createBiquadFilter();
-                noiseFilter.type = "bandpass"; noiseFilter.frequency.value = targetFreq; 
+                noiseFilter.type = "bandpass"; 
+                // 기존 targetFreq(건반 높이) 종속에서 벗어나, 구속 기반 주파수로 변경
+                noiseFilter.frequency.value = noiseBaseFreq; 
 
                 const noiseEnvelope = audioCtx.createGain();
                 noiseEnvelope.gain.setValueAtTime(0, startTime);
-                noiseEnvelope.gain.linearRampToValueAtTime(1.0, startTime + 0.1);
+                // 고정 볼륨(1.0) 대신 구속 기반 볼륨(noisePeakVol) 적용
+                noiseEnvelope.gain.linearRampToValueAtTime(noisePeakVol, startTime + 0.1);
                 
-                noiseEnvelope.gain.setValueAtTime(1.0, startTime + flightTime);
+                noiseEnvelope.gain.setValueAtTime(noisePeakVol, startTime + flightTime);
                 noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
                 noiseEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.11);
+
+
                 
                 const flightPanner = audioCtx.createPanner();
                 flightPanner.panningModel = 'equalpower'; 
