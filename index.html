@@ -2,43 +2,106 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (0.9m 다이나믹 이동 패치)</title>
+    <title>오디오 야구</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
+        .screen { display: none; }
+        .screen.active { display: block; }
         textarea {
             width: 100%; height: 150px; font-size: 18px;
             padding: 10px; margin-bottom: 20px;
             background-color: #f0f0f0; cursor: default;
         }
-        button { padding: 10px 20px; font-size: 16px; margin-right: 10px; margin-bottom: 10px; }
+        button { padding: 10px 20px; font-size: 16px; margin-right: 10px; margin-bottom: 10px; display: block; }
         .sr-only {
             position: absolute; width: 1px; height: 1px;
             margin: -1px; padding: 0; overflow: hidden;
             clip: rect(0, 0, 0, 0); border: 0;
         }
+        .version-text { margin-top: 30px; font-size: 14px; color: #555; }
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (최대 9칸 이동 및 구속 자동화 패치)</h1>
-    
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
-    <label for="gameArea">야구 게임 컨트롤 창</label>
-    <textarea id="gameArea" readonly 
-        aria-label="엔터 투구, 스페이스 스윙, 위 방향키 번트 자세 토글, C 타석 변경, 좌/우 방향키 이동, 아래 방향키 위치 확인, A 최근 구속 확인">여기에 포커스를 맞추고 플레이하세요.
+    <div id="mainMenuScreen" class="screen active">
+        <h1>오디오 베이스볼</h1>
+        <button id="btnGoSinglePlayer">1. 개인 플레이</button>
+        <button id="btnGoHelp">2. 도움말</button>
+        <div class="version-text">2026-05-07 버전 1.001</div>
+    </div>
+
+    <div id="singlePlayerScreen" class="screen">
+        <h1>개인 플레이</h1>
+        <button id="btnBattingPractice">1. 타격 연습</button>
+        <button id="btnPitchingPractice">2. 투구 연습</button>
+        <button id="btnPracticeMatch">3. 연습경기</button>
+        <button id="btnBackToMain">뒤로가기</button>
+    </div>
+
+    <div id="gameScreen" class="screen">
+        <h1>타격 연습</h1>
+        <label for="gameArea">야구 게임 컨트롤 창</label>
+        <textarea id="gameArea" readonly 
+            aria-label="엔터 투구, 스페이스 스윙, 위 방향키 번트 자세 토글, C 타석 변경, 좌/우 방향키 이동, 아래 방향키 위치 확인, A 최근 구속 확인">여기에 포커스를 맞추고 플레이하세요.
 - 엔터: 투구 
 - 스페이스바: 스윙 / 타격
 - 위(Up) 방향키: 번트 자세 토글
 - C 키: 좌/우타석 변경
 - 좌/우 방향키: 타석 내 앞/뒤 이동 (최대 9칸)
 - A 키: 최근 구속 확인 (마일/킬로미터 전환)</textarea>
-
-    <div>
-        <button id="btnSwitch" tabindex="0">타석 변경</button>
-        <button id="btnPitch" tabindex="0">투구</button>
+        <div>
+            <button id="btnExitGame">나가기</button>
+        </div>
     </div>
 
     <script>
+        // --- 메뉴 화면 전환 로직 ---
+        function switchScreen(screenId, focusElementId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+            if (focusElementId) {
+                document.getElementById(focusElementId).focus();
+            }
+        }
+
+        document.getElementById("btnGoSinglePlayer").addEventListener("click", () => {
+            switchScreen("singlePlayerScreen", "btnBattingPractice");
+        });
+
+        document.getElementById("btnBackToMain").addEventListener("click", () => {
+            switchScreen("mainMenuScreen", "btnGoSinglePlayer");
+        });
+
+        document.getElementById("btnGoHelp").addEventListener("click", () => {
+            speak("도움말 메뉴는 아직 준비 중입니다.");
+        });
+
+        document.getElementById("btnPitchingPractice").addEventListener("click", () => {
+            speak("투구 연습 모드는 아직 준비 중입니다.");
+        });
+
+        document.getElementById("btnPracticeMatch").addEventListener("click", () => {
+            speak("연습경기 모드는 아직 준비 중입니다.");
+        });
+
+        document.getElementById("btnBattingPractice").addEventListener("click", () => {
+            switchScreen("gameScreen", "gameArea");
+            speak("타격 연습을 시작합니다. 컨트롤 창에 포커스되었습니다.");
+        });
+
+        document.getElementById("btnExitGame").addEventListener("click", () => {
+            if (confirm("메인 메뉴로 돌아가시겠습니까?")) {
+                switchScreen("mainMenuScreen", "btnGoSinglePlayer");
+                speak("메인 메뉴로 돌아왔습니다.");
+            } else {
+                document.getElementById("gameArea").focus();
+            }
+        });
+
+        // --- 기존 게임 엔진 로직 (수정 없음) ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
         const audioBuffers = {}; 
@@ -107,7 +170,6 @@
             setTimeout(() => { announcer.textContent = text; }, 50);
         }
 
-        // 💡 이동한 칸 수에 따라 동적으로 이름을 생성해주는 함수 추가
         function getBoxName(step) {
             if (step === 0) return "타석 중앙";
             if (step < 0) return "앞으로 " + Math.abs(step) + "칸";
@@ -248,6 +310,8 @@
         }
 
         async function throwBall() {
+            // 게임 화면이 닫혀있으면 엔터를 눌러도 투구되지 않도록 방어 코드 추가
+            if (!document.getElementById("gameScreen").classList.contains("active")) return;
             if (isPitching) return;
             isPitching = true;
             hasSwung = false; 
@@ -355,10 +419,7 @@
                 pianoEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
                 pianoEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.11);
 
-// 💡 구속에 따른 바람 소리(노이즈) 주파수 및 볼륨 자동 계산
-                // 1. 구속이 빠를수록 주파수(음역)가 높아집니다. (85마일=425Hz, 100마일=800Hz)
                 let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25); 
-                // 2. 구속이 빠를수록 바람 소리의 최대 볼륨이 커집니다. (85마일=0.625, 100마일=1.0)
                 let noisePeakVol = 0.5 + ((pitchSpeedMph - 80) * 0.025); 
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
@@ -367,19 +428,15 @@
                 
                 const noiseFilter = audioCtx.createBiquadFilter();
                 noiseFilter.type = "bandpass"; 
-                // 기존 targetFreq(건반 높이) 종속에서 벗어나, 구속 기반 주파수로 변경
                 noiseFilter.frequency.value = noiseBaseFreq; 
 
                 const noiseEnvelope = audioCtx.createGain();
                 noiseEnvelope.gain.setValueAtTime(0, startTime);
-                // 고정 볼륨(1.0) 대신 구속 기반 볼륨(noisePeakVol) 적용
                 noiseEnvelope.gain.linearRampToValueAtTime(noisePeakVol, startTime + 0.1);
                 
                 noiseEnvelope.gain.setValueAtTime(noisePeakVol, startTime + flightTime);
                 noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
                 noiseEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.11);
-
-
                 
                 const flightPanner = audioCtx.createPanner();
                 flightPanner.panningModel = 'equalpower'; 
@@ -537,7 +594,6 @@
             }
         }
 
-        // 💡 제한을 -9로 늘려 앞(-0.9m)까지 갈 수 있게 수정
         function moveForward() { 
             if(boxStep > -9) { 
                 boxStep--; 
@@ -549,7 +605,6 @@
             } 
         }
         
-        // 💡 제한을 9로 늘려 뒤(0.9m)까지 갈 수 있게 수정
         function moveBackward() { 
             if(boxStep < 9) { 
                 boxStep++; 
@@ -603,14 +658,7 @@
                 if (isPitching) return; 
                 if (!isLeftBatter) moveBackward(); else moveForward(); 
             }
-            // 💡 현재 위치 확인 음성 출력부 수정
             else if (e.code === "ArrowDown") { speak("현재 " + getBoxName(boxStep) + "입니다"); }
-        });
-
-        document.getElementById("btnPitch").addEventListener("click", throwBall);
-        document.getElementById("btnSwitch").addEventListener("click", function() {
-            const e = new KeyboardEvent("keydown", {key: "c"});
-            gameArea.dispatchEvent(e);
         });
 
         function preloadAllPitches() {
