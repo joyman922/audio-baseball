@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-07 버전 1.009</div>
+        <div class="version-text">2026-05-07 버전 1.010</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -537,7 +537,7 @@
 // 3인칭 화면. y축을 조절해야 한다. 두번째 문장이 y축 담당함.
 
             audioCtx.listener.positionX.setTargetAtTime(0, now, 0.2);
-            audioCtx.listener.positionY.setTargetAtTime(10, now, 0.2);
+            audioCtx.listener.positionY.setTargetAtTime(5, now, 0.2);
             audioCtx.listener.positionZ.setTargetAtTime(15, now, 0.2);
 
             const coords = {
