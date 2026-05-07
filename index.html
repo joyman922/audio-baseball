@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-07 버전 1.007 (3D 거리 및 볼륨 안정화)</div>
+        <div class="version-text">2026-05-07 버전 1.008 (내야안타 시퀀스 및 다이내믹 시점 패치)</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -360,7 +360,8 @@
                 pianoEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.11);
 
                 let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25); 
-                let noisePeakVol = 0.5 + ((pitchSpeedMph - 80) * 0.025); 
+                // 💡 [수정] 투구 바람 소리의 볼륨을 기존 0.5 이상에서 0.03 수준으로 대폭 축소했습니다.
+                let noisePeakVol = 0.03 + ((pitchSpeedMph - 80) * 0.001); 
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; 
@@ -456,6 +457,7 @@
             }, 1000);
         }
 
+        // 💡 [수정] 빗맞은 타구나 내야 안타 코스에 infield_hit 속성을 부여하여 송구 시퀀스를 유도합니다.
         function calculateHitResult(swingType, timeDiff) {
             let r = Math.random() * 100;
             const getVel = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -485,7 +487,8 @@
                     if (r < 95) return { inPlay: true, type: 'groundout', dir: '2b', power: 2, vel: getVel(70, 85), msg: "2루수 정면 땅볼 아웃." };
                     return { inPlay: false, type: 'foul', msg: "파울." };
                 } else if (timeDiff <= 30) { 
-                    if (r < 20) return { inPlay: true, type: 'single', dir: '1b', power: 2, vel: getVel(65, 75), msg: "1루수 옆 내야 안타!" };
+                    // 💡 [수정] 1루 수비 범위 밖이거나 내야 깊숙한 곳으로 간 땅볼에 대해 내야 안타 속성 부여
+                    if (r < 20) return { inPlay: true, type: 'infield_hit', dir: 'ss', power: 2, vel: getVel(65, 75), msg: "유격수 깊은 타구 잡아서 1루에 뿌립니다... 세이프! 내야 안타!" };
                     if (r < 30) return { inPlay: true, type: 'extra', dir: 'lf', power: 3, vel: getVel(75, 85), msg: "좌중간 2루타!" };
                     if (r < 75) return { inPlay: false, type: 'foul', msg: "파울." }; 
                     if (r < 85) return { inPlay: true, type: 'flyout', dir: 'rf', power: 1, vel: getVel(50, 65), msg: "우익수 뜬공 아웃." };
@@ -514,7 +517,8 @@
                 } else if (timeDiff <= 35) { 
                     if (r < 50) return { inPlay: true, type: 'groundout', dir: '3b', power: 1, vel: getVel(50, 65), msg: "빗맞은 3루수 앞 땅볼 아웃." };
                     if (r < 90) return { inPlay: true, type: 'flyout', dir: 'cf', power: 2, vel: getVel(60, 75), msg: "높이 뜬 공, 중견수 뜬공 아웃." };
-                    return { inPlay: true, type: 'single', dir: '1b', power: 1, vel: getVel(50, 60), msg: "빗맞은 타구 내야 안타가 됩니다." };
+                    // 💡 [수정] 빗맞은 내야 안타 송구 시퀀스용 속성 부여
+                    return { inPlay: true, type: 'infield_hit', dir: '3b', power: 1, vel: getVel(50, 60), msg: "3루수 대쉬하며 잡아서 1루에 멉니다! 세이프! 빗맞은 타구 내야 안타가 됩니다." };
                 } else if (timeDiff <= 45) { 
                     return { inPlay: false, type: 'foul', msg: "커트! 파울." };
                 }
@@ -522,11 +526,13 @@
             }
         }
 
+        // 💡 [수정] 다이내믹 Y축 고도 및 내야 안타 송구 시퀀스가 적용된 3인칭 연출
         function executeInPlaySequence(result) {
             const now = audioCtx.currentTime;
             
+            // 내야 상공에서는 고도를 기존 40에서 60으로 확 높여 1루와 3루의 X축 거리감을 극대화합니다.
             audioCtx.listener.positionX.setTargetAtTime(0, now, 0.2);
-            audioCtx.listener.positionY.setTargetAtTime(40, now, 0.2);
+            audioCtx.listener.positionY.setTargetAtTime(60, now, 0.2);
             audioCtx.listener.positionZ.setTargetAtTime(15, now, 0.2);
 
             const coords = {
@@ -545,12 +551,14 @@
 
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, result.power);
 
+            // 공이 외야로 넘어갈 경우 고도를 60에서 25로 서서히 낮춰 공과의 균형을 맞춥니다.
             if (['lf', 'cf', 'rf'].includes(result.dir)) {
                 audioCtx.listener.positionX.setTargetAtTime(dest.x * 0.4, now + 1.0, 0.5); 
+                audioCtx.listener.positionY.setTargetAtTime(25, now + 1.0, 0.5); 
                 audioCtx.listener.positionZ.setTargetAtTime(-30, now + 1.0, 0.5); 
             }
 
-            let announceMsg = (result.vel ? "타구 속도 " + result.vel + "마일. " : "") + result.msg;
+            let announceMsg = result.msg;
 
             setTimeout(() => {
                 if (result.type !== 'hr') {
@@ -559,14 +567,18 @@
                     playGloveCatchSound(dest.x, dest.z - 10); 
                 }
 
-                if (result.type === 'groundout' && result.dir !== '1b') {
+                // 💡 [수정] 일반 땅볼 아웃뿐만 아니라 '내야 안타'일 때도 무조건 1루로 송구하는 연출을 거칩니다.
+                let isGrounder = (result.type === 'groundout' || result.type === 'infield_hit');
+
+                if (isGrounder && result.dir !== '1b') {
                     playBallFlightSound(dest.x, dest.z, 20, -20, 0.8, 4); 
                     setTimeout(() => {
-                        playGloveCatchSound(20, -20); 
+                        playGloveCatchSound(20, -20); // 1루수 캐치음
+                        speak(announceMsg); // 아웃 또는 세이프 결과는 1루에 공이 꽂힌 직후에 출력됩니다.
                     }, 800);
+                } else {
+                    speak(announceMsg);
                 }
-
-                speak(announceMsg);
                 
             }, flightTime * 1000);
 
@@ -574,7 +586,7 @@
                 updateListenerPosition(false); 
                 speak("타석으로 시점 복귀.");
                 isPitching = false; 
-            }, (flightTime + 2.5) * 1000);
+            }, (flightTime + 3.5) * 1000); // 송구 시간만큼 딜레이를 약간 늘림
         }
 
         function swingBat(swingType = 'normal') {
@@ -624,6 +636,10 @@
             else if (result.inPlay) {
                 handleHitFadeOut(); clearTimeout(pitchTimeout);
                 playHitSound(audioHitX, actualY, actualZ, false); 
+                
+                // 💡 [수정] 타구 속도가 존재하면 공이 맞아 날아가는 즉시 안내합니다.
+                if (result.vel) speak("타구 속도 " + result.vel + "마일.");
+                
                 executeInPlaySequence(result); 
             }
         }
