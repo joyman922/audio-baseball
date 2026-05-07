@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>오디오 베이스볼 (통합 완성본)</title>
+    <title>오디오 베이스볼</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         .screen { display: none; }
@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-07 버전 1.005 (완전 통합본)</div>
+        <div class="version-text">2026-05-07 버전 1.006</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -212,14 +212,23 @@
         }
 
         // 💡 [신규 추가] 3인칭 연출 시 타구가 그라운드를 굴러가거나 날아가는 가상의 바람/공기 소리
-        function playBallFlightSound(startX, startZ, endX, endZ, flightTime, freq) {
+
+
+// 💡 [수정됨] 파워(속도)에 따라 바람 소리의 톤과 볼륨이 달라지는 함수
+        function playBallFlightSound(startX, startZ, endX, endZ, flightTime, power) {
             const now = audioCtx.currentTime;
             const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
-            const filter = audioCtx.createBiquadFilter(); filter.type = "bandpass"; filter.frequency.value = freq;
+            
+            // 파워(1~5)에 따라 주파수(소리의 날카로움)와 최대 볼륨을 차등 적용
+            const baseFreq = 200 + (power * 250); 
+            const peakVol = 0.2 + (power * 0.15); 
+
+            const filter = audioCtx.createBiquadFilter(); filter.type = "bandpass"; filter.frequency.value = baseFreq;
             const gain = audioCtx.createGain();
+            
             gain.gain.setValueAtTime(0, now);
-            gain.gain.linearRampToValueAtTime(0.8, now + 0.1);
-            gain.gain.setValueAtTime(0.8, now + flightTime - 0.1);
+            gain.gain.linearRampToValueAtTime(peakVol, now + 0.1);
+            gain.gain.setValueAtTime(peakVol, now + flightTime - 0.1);
             gain.gain.linearRampToValueAtTime(0.001, now + flightTime);
 
             const panner = audioCtx.createPanner();
@@ -234,6 +243,8 @@
             src.start(now); src.stop(now + flightTime);
             activeNodes.push({ type: 'inplay', src: src });
         }
+
+
 
         // 💡 [신규 추가] 3인칭 연출 시 야수가 글러브로 캐치하는 소리
         function playGloveCatchSound(x, z) {
@@ -450,112 +461,131 @@
         }
 
         // 💡 [신규 추가] 확률표에 따른 타격 결과 연산 로직 (정확한 퍼센티지 적용)
+
+
+// 💡 [수정됨] 모든 타구 결과에 power(1~5단계 속도)를 부여함
         function calculateHitResult(swingType, timeDiff) {
             let r = Math.random() * 100;
             if (swingType === 'big') {
-                if (timeDiff <= 15) { // 15 이하 : 홈런 30, 장타 30, 단타 10, 나머지는 뜬공
-                    if (r < 30) return { inPlay: true, type: 'hr', dir: 'cf', msg: "가운데 담장 훌쩍 넘어가는 대형 홈런!" };
-                    if (r < 60) return { inPlay: true, type: 'extra', dir: 'lf', msg: "좌익수 펜스 직접 때리는 2루타!" };
-                    if (r < 70) return { inPlay: true, type: 'single', dir: 'rf', msg: "우익수 앞 강한 타구 안타!" };
-                    return { inPlay: true, type: 'flyout', dir: 'cf', msg: "아! 잘 맞은 타구, 중견수 워닝 트랙에서 잡힙니다!" };
-                } else if (timeDiff <= 25) { // 16~25 : 홈런 3, 장타 15, 단타 5, 나머지는 뜬공/파울/빗맞은 땅볼
-                    if (r < 3) return { inPlay: true, type: 'hr', dir: 'rf', msg: "우측 폴대 안쪽으로 아슬아슬하게 넘어가는 홈런!" };
-                    if (r < 18) return { inPlay: true, type: 'extra', dir: 'cf', msg: "우중간 가르는 2루타!" };
-                    if (r < 23) return { inPlay: true, type: 'single', dir: 'lf', msg: "좌전 안타!" };
-                    if (r < 65) return { inPlay: true, type: 'groundout', dir: 'ss', msg: "유격수 땅볼 아웃." }; // 땅볼 비율 높음
-                    if (r < 85) return { inPlay: true, type: 'flyout', dir: 'rf', msg: "우익수 파울 플라이 아웃." }; 
-                    return { inPlay: false, type: 'foul', msg: "파울." }; // 커트 비율 낮음
+                if (timeDiff <= 15) { 
+                    if (r < 30) return { inPlay: true, type: 'hr', dir: 'cf', power: 5, msg: "가운데 담장 훌쩍 넘어가는 대형 홈런!" };
+                    if (r < 60) return { inPlay: true, type: 'extra', dir: 'lf', power: 4.5, msg: "좌익수 펜스 직접 때리는 2루타!" };
+                    if (r < 70) return { inPlay: true, type: 'single', dir: 'rf', power: 4, msg: "우익수 앞 강한 타구 안타!" };
+                    return { inPlay: true, type: 'flyout', dir: 'cf', power: 3.5, msg: "아! 잘 맞은 타구, 중견수 워닝 트랙에서 잡힙니다!" };
+                } else if (timeDiff <= 25) { 
+                    if (r < 3) return { inPlay: true, type: 'hr', dir: 'rf', power: 4.5, msg: "우측 폴대 안쪽으로 아슬아슬하게 넘어가는 홈런!" };
+                    if (r < 18) return { inPlay: true, type: 'extra', dir: 'cf', power: 4, msg: "우중간 가르는 2루타!" };
+                    if (r < 23) return { inPlay: true, type: 'single', dir: 'lf', power: 3, msg: "좌전 안타!" };
+                    if (r < 65) return { inPlay: true, type: 'groundout', dir: 'ss', power: 2, msg: "유격수 땅볼 아웃." }; 
+                    if (r < 85) return { inPlay: true, type: 'flyout', dir: 'rf', power: 2.5, msg: "우익수 파울 플라이 아웃." }; 
+                    return { inPlay: false, type: 'foul', msg: "파울." }; 
                 }
-                return { inPlay: false, type: 'miss', msg: "헛스윙!" }; // 26 이상 무조건 헛스윙
+                return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             } 
             else if (swingType === 'short') {
-                if (timeDiff <= 15) { // 15 이하 : 홈런 1, 단타 50, 장타 20, 나머지는 뜬공 비율 높게
-                    if (r < 1) return { inPlay: true, type: 'hr', dir: 'lf', msg: "어! 기적 같은 좌월 홈런입니다!" };
-                    if (r < 51) return { inPlay: true, type: 'single', dir: 'cf', msg: "중견수 앞 깔끔한 단타!" };
-                    if (r < 71) return { inPlay: true, type: 'extra', dir: 'rf', msg: "우익수 선상 빠지는 2루타!" };
-                    if (r < 90) return { inPlay: true, type: 'flyout', dir: 'lf', msg: "좌익수 뜬공 아웃." };
-                    if (r < 95) return { inPlay: true, type: 'groundout', dir: '2b', msg: "2루수 정면 땅볼 아웃." };
+                if (timeDiff <= 15) { 
+                    if (r < 1) return { inPlay: true, type: 'hr', dir: 'lf', power: 4, msg: "어! 기적 같은 좌월 홈런입니다!" };
+                    if (r < 51) return { inPlay: true, type: 'single', dir: 'cf', power: 3, msg: "중견수 앞 깔끔한 단타!" };
+                    if (r < 71) return { inPlay: true, type: 'extra', dir: 'rf', power: 3.5, msg: "우익수 선상 빠지는 2루타!" };
+                    if (r < 90) return { inPlay: true, type: 'flyout', dir: 'lf', power: 2.5, msg: "좌익수 뜬공 아웃." };
+                    if (r < 95) return { inPlay: true, type: 'groundout', dir: '2b', power: 2, msg: "2루수 정면 땅볼 아웃." };
                     return { inPlay: false, type: 'foul', msg: "파울." };
-                } else if (timeDiff <= 30) { // 16~30 : 단타 20, 장타 10, 파울 가능성 더 높게
-                    if (r < 20) return { inPlay: true, type: 'single', dir: '1b', msg: "1루수 옆 내야 안타!" };
-                    if (r < 30) return { inPlay: true, type: 'extra', dir: 'lf', msg: "좌중간 2루타!" };
-                    if (r < 75) return { inPlay: false, type: 'foul', msg: "파울." }; // 파울 45% 할당
-                    if (r < 85) return { inPlay: true, type: 'flyout', dir: 'rf', msg: "우익수 뜬공 아웃." };
-                    return { inPlay: true, type: 'groundout', dir: '3b', msg: "3루수 힘없는 땅볼 아웃." };
-                } else if (timeDiff <= 55) { // 31~55 : 커트 파울 60, 나머지 땅/뜬공
+                } else if (timeDiff <= 30) { 
+                    if (r < 20) return { inPlay: true, type: 'single', dir: '1b', power: 2.5, msg: "1루수 옆 내야 안타!" };
+                    if (r < 30) return { inPlay: true, type: 'extra', dir: 'lf', power: 3, msg: "좌중간 2루타!" };
+                    if (r < 75) return { inPlay: false, type: 'foul', msg: "파울." }; 
+                    if (r < 85) return { inPlay: true, type: 'flyout', dir: 'rf', power: 2, msg: "우익수 뜬공 아웃." };
+                    return { inPlay: true, type: 'groundout', dir: '3b', power: 1.5, msg: "3루수 힘없는 땅볼 아웃." };
+                } else if (timeDiff <= 55) { 
                     if (r < 60) return { inPlay: false, type: 'foul', msg: "커트! 끈질기게 파울을 만듭니다." };
-                    if (r < 80) return { inPlay: true, type: 'groundout', dir: 'ss', msg: "유격수 땅볼 아웃." };
-                    return { inPlay: true, type: 'flyout', dir: 'c', msg: "포수 파울 플라이 아웃." };
+                    if (r < 80) return { inPlay: true, type: 'groundout', dir: 'ss', power: 1.5, msg: "유격수 땅볼 아웃." };
+                    return { inPlay: true, type: 'flyout', dir: 'c', power: 1.5, msg: "포수 파울 플라이 아웃." };
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" };
             }
-            else { // normal (기본 스윙)
-                if (timeDiff <= 15) { // 15 이하 : 홈런 10, 단타 20, 장타 40, 뜬공 비율 좀 더 높게
-                    if (r < 10) return { inPlay: true, type: 'hr', dir: 'cf', msg: "가운데 펜스 훌쩍 넘어가는 홈런!" };
-                    if (r < 30) return { inPlay: true, type: 'single', dir: 'lf', msg: "좌전 안타!" };
-                    if (r < 70) return { inPlay: true, type: 'extra', dir: 'rf', msg: "우중간 가르는 2루타!" };
-                    if (r < 85) return { inPlay: true, type: 'flyout', dir: 'cf', msg: "아! 중견수 다이빙 캐치! 아웃입니다!" };
-                    if (r < 95) return { inPlay: true, type: 'groundout', dir: 'ss', msg: "유격수 깊은 타구, 아웃." };
+            else { 
+                if (timeDiff <= 15) { 
+                    if (r < 10) return { inPlay: true, type: 'hr', dir: 'cf', power: 5, msg: "가운데 펜스 훌쩍 넘어가는 홈런!" };
+                    if (r < 30) return { inPlay: true, type: 'single', dir: 'lf', power: 3.5, msg: "좌전 안타!" };
+                    if (r < 70) return { inPlay: true, type: 'extra', dir: 'rf', power: 4, msg: "우중간 가르는 2루타!" };
+                    if (r < 85) return { inPlay: true, type: 'flyout', dir: 'cf', power: 4, msg: "아! 중견수 다이빙 캐치! 아웃입니다!" };
+                    if (r < 95) return { inPlay: true, type: 'groundout', dir: 'ss', power: 3.5, msg: "유격수 깊은 타구, 아웃." };
                     return { inPlay: false, type: 'foul', msg: "뒤로 넘어가는 파울." };
-                } else if (timeDiff <= 20) { // 16~20 : 단타 40 장타 20 나머지 비율
-                    if (r < 40) return { inPlay: true, type: 'single', dir: 'cf', msg: "중견수 앞 떨어지는 안타!" };
-                    if (r < 60) return { inPlay: true, type: 'extra', dir: 'lf', msg: "좌익수 옆 2루타!" };
-                    if (r < 75) return { inPlay: true, type: 'flyout', dir: 'rf', msg: "우익수 뜬공 아웃." };
-                    if (r < 90) return { inPlay: true, type: 'groundout', dir: '2b', msg: "2루수 땅볼 아웃." };
+                } else if (timeDiff <= 20) { 
+                    if (r < 40) return { inPlay: true, type: 'single', dir: 'cf', power: 3, msg: "중견수 앞 떨어지는 안타!" };
+                    if (r < 60) return { inPlay: true, type: 'extra', dir: 'lf', power: 3.5, msg: "좌익수 옆 2루타!" };
+                    if (r < 75) return { inPlay: true, type: 'flyout', dir: 'rf', power: 2.5, msg: "우익수 뜬공 아웃." };
+                    if (r < 90) return { inPlay: true, type: 'groundout', dir: '2b', power: 2.5, msg: "2루수 땅볼 아웃." };
                     return { inPlay: false, type: 'foul', msg: "파울." };
-                } else if (timeDiff <= 35) { // 21~35 : 빗맞은 타구. 뜬공/땅볼 비율 높게
-                    if (r < 50) return { inPlay: true, type: 'groundout', dir: '3b', msg: "빗맞은 3루수 앞 땅볼 아웃." };
-                    if (r < 90) return { inPlay: true, type: 'flyout', dir: 'cf', msg: "높이 뜬 공, 중견수 뜬공 아웃." };
-                    return { inPlay: true, type: 'single', dir: '1b', msg: "빗맞은 타구 내야 안타가 됩니다." };
-                } else if (timeDiff <= 45) { // 36~45 : 파울
+                } else if (timeDiff <= 35) { 
+                    if (r < 50) return { inPlay: true, type: 'groundout', dir: '3b', power: 1.5, msg: "빗맞은 3루수 앞 땅볼 아웃." };
+                    if (r < 90) return { inPlay: true, type: 'flyout', dir: 'cf', power: 2, msg: "높이 뜬 공, 중견수 뜬공 아웃." };
+                    return { inPlay: true, type: 'single', dir: '1b', power: 1.5, msg: "빗맞은 타구 내야 안타가 됩니다." };
+                } else if (timeDiff <= 45) { 
                     return { inPlay: false, type: 'foul', msg: "커트! 파울." };
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" };
             }
         }
 
+
+
+
+
+
+
+
+
+
         // 💡 [신규 추가] 3인칭 중계 시점 카메라 워킹 및 사운드 연출
+
+
+// 💡 [수정됨] 완벽한 좌우 밸런스(Z축 정면)를 갖춘 3인칭 시점 연출
         function executeInPlaySequence(result) {
             const now = audioCtx.currentTime;
             
-            // 시점을 홈플레이트 위 15미터 상공으로 부드럽게 이륙시킴 (1인칭 -> 3인칭)
-            audioCtx.listener.positionX.setTargetAtTime(-5, now, 0.2);
+            // 시점을 포수 바로 뒤쪽 상공(X=0, Y=15, Z=10)으로 띄움. 기본 방향(-Z)을 바라보게 됨.
+            audioCtx.listener.positionX.setTargetAtTime(0, now, 0.2);
             audioCtx.listener.positionY.setTargetAtTime(15, now, 0.2);
-            audioCtx.listener.positionZ.setTargetAtTime(0, now, 0.2);
+            audioCtx.listener.positionZ.setTargetAtTime(10, now, 0.2);
 
-            // 목적지 좌표 (홈플레이트 기준 투수는 X=18. 1루는 우측 안, 3루는 좌측 안)
+            // 홈플레이트(0,0)를 기준으로 내 앞(Z 음수 방향)으로 펼쳐지는 완벽한 대칭 좌표
+            // 좌측(-X)은 3루쪽, 우측(+X)은 1루쪽.
             const coords = {
-                '3b': { x: 13.5, z: -13.5 }, 'ss': { x: 20, z: -6 },
-                '2b': { x: 20, z: 6 }, '1b': { x: 13.5, z: 13.5 },
-                'lf': { x: 60, z: -30 }, 'cf': { x: 75, z: 0 }, 'rf': { x: 60, z: 30 },
-                'c': { x: -3, z: 0 }
+                'c':  { x: 0, z: 0 },         
+                '3b': { x: -18, z: -18 },     // 3루 (완벽한 왼쪽)
+                'ss': { x: -9, z: -25 },      
+                '2b': { x: 9, z: -25 },       
+                '1b': { x: 18, z: -18 },      // 1루 (완벽한 오른쪽)
+                'lf': { x: -35, z: -60 },     
+                'cf': { x: 0, z: -75 },       // 중견수 (완벽한 정면 멀리)
+                'rf': { x: 35, z: -60 }       
             };
             let dest = coords[result.dir] || coords['cf'];
 
             let flightTime = (result.type === 'hr' || result.type === 'flyout') ? 3.0 : 1.5;
-            let windFreq = result.type === 'hr' ? 1200 : (result.type === 'groundout' ? 400 : 800);
 
-            // 공이 그라운드나 상공을 가르고 날아가는 소리 재생
-            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, windFreq);
+            // 홈플레이트(0,0)에서 목적지로 파워에 맞는 타구음 재생
+            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, result.power);
 
-            // 외야성 타구일 경우, 카메라가 내야를 지나 외야 상공(X=30)까지 공을 따라 전진함
+            // 외야성 타구일 경우, 카메라가 공을 따라 필드 중앙(Z=-30)까지 부드럽게 전진함
             if (['lf', 'cf', 'rf'].includes(result.dir)) {
-                audioCtx.listener.positionX.setTargetAtTime(30, now + 1.0, 0.5);
+                audioCtx.listener.positionX.setTargetAtTime(dest.x * 0.4, now + 1.0, 0.5); 
+                audioCtx.listener.positionZ.setTargetAtTime(-30, now + 1.0, 0.5); 
             }
 
-            // 공 도착 후 수비 연출
             setTimeout(() => {
                 if (result.type !== 'hr') {
-                    playGloveCatchSound(dest.x, dest.z); // 글러브 포구음
+                    playGloveCatchSound(dest.x, dest.z); 
                 } else {
-                    playGloveCatchSound(dest.x + 10, dest.z); // 임시 바운드 소리
+                    playGloveCatchSound(dest.x, dest.z - 10); // 담장 넘어간 바운드 소리
                 }
 
-                // 내야 땅볼 처리 로직: 잡은 후 1루(X=13.5, Z=13.5)로 송구하는 바람 소리와 포구음 연출
+                // 땅볼 송구 연출: 잡은 위치에서 1루(18, -18)로 레이저 송구 (송구 파워는 4 고정)
                 if (result.type === 'groundout' && result.dir !== '1b') {
-                    playBallFlightSound(dest.x, dest.z, 13.5, 13.5, 0.8, 1000); // 레이저 송구 소리
+                    playBallFlightSound(dest.x, dest.z, 18, -18, 0.8, 4); 
                     setTimeout(() => {
-                        playGloveCatchSound(13.5, 13.5); // 1루수 캐치 소리
+                        playGloveCatchSound(18, -18); // 1루수 캐치
                     }, 800);
                 }
 
@@ -563,13 +593,21 @@
                 
             }, flightTime * 1000);
 
-            // 플레이 종료 후 시점이 다시 타석으로 자연스럽게 하강 복귀함
+            // 플레이 종료 후 시점이 다시 1인칭 타석으로 자연스럽게 하강 복귀
             setTimeout(() => {
                 updateListenerPosition();
                 speak("타석으로 시점 복귀.");
                 isPitching = false; 
             }, (flightTime + 2.5) * 1000);
         }
+
+
+
+
+
+
+
+
 
         // 💡 기존 번트 로직을 보존하고 확률 계산기를 도입한 통합 스윙 함수
         function swingBat(swingType = 'normal') {
