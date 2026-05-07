@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>리얼 야구 (다이나믹 구속 자동화 패치)</title>
+    <title>리얼 야구 (0.9m 다이나믹 이동 패치)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         textarea {
@@ -19,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>리얼 야구 (다이나믹 구속 적용 및 A키 확인 패치)</h1>
+    <h1>리얼 야구 (최대 9칸 이동 및 구속 자동화 패치)</h1>
     
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
@@ -30,7 +30,7 @@
 - 스페이스바: 스윙 / 타격
 - 위(Up) 방향키: 번트 자세 토글
 - C 키: 좌/우타석 변경
-- 좌/우 방향키: 타석 내 앞/뒤 이동
+- 좌/우 방향키: 타석 내 앞/뒤 이동 (최대 9칸)
 - A 키: 최근 구속 확인 (마일/킬로미터 전환)</textarea>
 
     <div>
@@ -97,7 +97,6 @@
         let activeNodes = [];
         
         let boxStep = 0; 
-        const boxNames = {"-1": "타석 앞", "0": "타석 중앙", "1": "타석 뒤"};
         let actualY, actualZ; 
         let isStrike = false; 
         let pitchResultText = "";
@@ -106,6 +105,13 @@
         function speak(text) {
             announcer.textContent = ""; 
             setTimeout(() => { announcer.textContent = text; }, 50);
+        }
+
+        // 💡 이동한 칸 수에 따라 동적으로 이름을 생성해주는 함수 추가
+        function getBoxName(step) {
+            if (step === 0) return "타석 중앙";
+            if (step < 0) return "앞으로 " + Math.abs(step) + "칸";
+            return "뒤로 " + step + "칸";
         }
 
         function getAvatarX() {
@@ -249,13 +255,11 @@
             
             stopAllActiveNodes(); 
 
-            // 💡 구속 다이나믹 생성 (85마일 ~ 100마일 사이 랜덤)
             let pitchSpeedMph = Math.floor(Math.random() * 16) + 85; 
             
             lastPitchSpeedMph = pitchSpeedMph; 
             speedToggleState = 0; 
             
-            // 💡 속도가 바뀌면 비행 시간도 즉시 자동 계산됩니다.
             let speedMs = pitchSpeedMph * 0.44704; 
             currentFlightTime = 19.5 / speedMs; 
             const flightTime = currentFlightTime;
@@ -309,7 +313,6 @@
             else locStr = "가운데";
 
             let callStr = isStrike ? "스트라이크" : "볼";
-            // 투구 결과 스피크에도 현재 구속 변수가 자동으로 들어갑니다.
             pitchResultText = `${locStr} ${callStr}, ${pitchSpeedMph}마일`;
 
             let midiNote = 60 + (aimZ_obj.noteIdx - 3) + ((aimY_obj.octIdx - 2) * 12);
@@ -523,22 +526,25 @@
             }
         }
 
+        // 💡 제한을 -9로 늘려 앞(-0.9m)까지 갈 수 있게 수정
         function moveForward() { 
-            if(boxStep > -1) { 
+            if(boxStep > -9) { 
                 boxStep--; 
                 updateListenerPosition();
                 playWalkSound();
-                speak(boxNames[boxStep]); 
+                speak(getBoxName(boxStep)); 
             } else { 
                 speak("더 이상 투수 쪽으로 갈 수 없습니다"); 
             } 
         }
+        
+        // 💡 제한을 9로 늘려 뒤(0.9m)까지 갈 수 있게 수정
         function moveBackward() { 
-            if(boxStep < 1) { 
+            if(boxStep < 9) { 
                 boxStep++; 
                 updateListenerPosition();
                 playWalkSound();
-                speak(boxNames[boxStep]); 
+                speak(getBoxName(boxStep)); 
             } else { 
                 speak("더 이상 포수 쪽으로 갈 수 없습니다"); 
             } 
@@ -586,7 +592,8 @@
                 if (isPitching) return; 
                 if (!isLeftBatter) moveBackward(); else moveForward(); 
             }
-            else if (e.code === "ArrowDown") { speak("현재 " + boxNames[boxStep] + "입니다"); }
+            // 💡 현재 위치 확인 음성 출력부 수정
+            else if (e.code === "ArrowDown") { speak("현재 " + getBoxName(boxStep) + "입니다"); }
         });
 
         document.getElementById("btnPitch").addEventListener("click", throwBall);
