@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.026 (원거리/느린 타구 볼륨 감쇄율 수정 및 귀루 텍스트 명확화)</div>
+        <div class="version-text">2026-05-08 버전 1.027 (단타 롤링 물리엔진, 사운드 고정 및 송구 방향성 강화)</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -243,16 +243,19 @@
             }
         }
 
+        // [수정] 타구음 통일, 볼륨 상향 및 감쇄율(rolloffFactor) 극소화
         function playBallFlightSound(startX, startZ, endX, endZ, flightTime, rollTime, power, trajectory = 'ground', isThrow = false) {
             const now = audioCtx.currentTime;
             const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
             
-            // [수정] 약한 타구도 확실히 들리게 기본 볼륨 대폭 상향
-            let baseFreq = 200 + (power * 250); 
-            if (isThrow) baseFreq += 250; 
-            
-            let peakVol = 0.15 + (power * 0.05); // 약한 타구도 최소 0.2 유지
-            if (isThrow) peakVol = 0.8 + (power * 0.15); // 송구는 압도적으로 크게
+            // 타구음은 무조건 100마일급 명확한 바람 소리로 통일
+            let baseFreq = 800; 
+            let peakVol = 0.2; // 거리가 멀어도 절대 죽지 않을 기본 볼륨 확보
+
+            if (isThrow) {
+                baseFreq = 1200; // 송구는 더욱 강하고 날카롭게
+                peakVol = 0.8;   // 송구음 압도적으로 증폭
+            }
 
             const filter = audioCtx.createBiquadFilter(); filter.type = "bandpass"; 
             const gain = audioCtx.createGain();
@@ -284,9 +287,8 @@
             panner.panningModel = 'equalpower'; 
             panner.distanceModel = 'linear'; 
             panner.refDistance = 1; 
-            panner.maxDistance = 150; 
-            // [수정] 150m 끝까지 날아가도 볼륨이 최소 50%는 유지되도록 감쇄율 하향 (원근감은 주되 소리는 죽지 않음)
-            panner.rolloffFactor = 0.5; 
+            panner.maxDistance = 500; // [수정] 500m로 대폭 증가
+            panner.rolloffFactor = 0.1; // [수정] 거리에 따른 볼륨 감소 최소화 (멀리 가도 명확히 들림)
 
             panner.positionX.setValueAtTime(startX, now);
             panner.positionX.linearRampToValueAtTime(endX, now + flightTime);
@@ -644,10 +646,11 @@
                 'rc_deep': { x: 25, z: -135 }
             };
 
+            // [수정] 외야수 Z좌표 -100 으로 고정
             const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, '1b': {x: 15, z: -42}, '2b': {x: 0, z: -60},
                 '3b': {x: -35, z: -35}, 'ss': {x: -15, z: -42}, 
-                'lf': {x: -45, z: -110}, 'cf': {x: 0, z: -110}, 'rf': {x: 45, z: -110}
+                'lf': {x: -45, z: -100}, 'cf': {x: 0, z: -100}, 'rf': {x: 45, z: -100}
             };
 
             const bases = {
@@ -706,7 +709,14 @@
             let fPos = fielders[activeFielderKey];
             let distToBall = Math.sqrt(Math.pow(dest.x - fPos.x, 2) + Math.pow(dest.z - fPos.z, 2));
             
-            let fielderRunTime = distToBall / 8.0; 
+            // [수정] 단타 시 공이 굴러와 만나는 롤링 물리 엔진 반영 (외야수가 뛰어야할 실제 거리를 60% 단축)
+            if (['single'].includes(result.type) && isOutfield) {
+                let rollingDistance = distToBall * 0.6; 
+                distToBall -= rollingDistance; 
+            }
+
+            // [수정] 외야수 뛰는 속도를 7.0m/s 로 수정 (주자는 8.0 유지)
+            let fielderRunTime = distToBall / 7.0; 
 
             if (!['single', 'extra', 'infield_hit', 'groundout', 'foul_drop'].includes(result.type) || result.trajectory === 'fly' || activeFielderKey === 'c') {
                 fielderRunTime = 0; 
@@ -727,7 +737,9 @@
             }
 
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.power, result.trajectory, false);
-            speak(`${result.msgInit}`);
+            
+            // [수정] 타구 속도 TTS 누락 복구
+            speak(`타구 속도 ${result.vel}마일! ${result.msgInit}`);
 
             let timeToCatch = flightTime + chaseTime;
             
@@ -789,7 +801,7 @@
                 audioCtx.listener.positionZ.linearRampToValueAtTime(15, throwStart + throwTime);
 
                 let totalDefensiveTime = timeToCatch + fieldingTime + throwTime;
-                let runnerTime1B = 42.42 / 8.0; 
+                let runnerTime1B = 42.42 / 8.0; // 주자는 초속 8m 고정 (1루까지 약 5.3초)
                 let runnerTime2B = runnerTime1B * 2; 
                 let runnerTime3B = runnerTime1B * 3; 
 
@@ -803,7 +815,6 @@
                     let prevBase = targetBase === '2b' ? '1루' : '2루';
                     let targetName = targetBase === '2b' ? '2루' : '3루';
                     
-                    // [수정] 귀루 시 정확한 베이스 명칭과 송구 위치 동기화 안내
                     if (totalDefensiveTime < targetRunnerTime - 1.0) {
                         speak(`송구가 빠릅니다! 주자 무리하지 않고 ${prevBase}로 귀루합니다. ${targetName}로 송구!`);
                         await sleep(throwTime * 1000);
@@ -826,7 +837,13 @@
                     }
                     await sleep(800);
                 } else {
-                    speak(`1루로 송구!`);
+                    let coverText = "";
+                    if (targetBase === '1b') {
+                        if (activeFielderKey === '1b') coverText = " 투수 1루 커버!";
+                        else if (activeFielderKey === 'p' || result.dir === '1b2b' || result.dir === 'p1b') coverText = " 1루수 베이스 커버!";
+                    }
+                    speak(`1루로 송구!${coverText}`);
+
                     await sleep(throwTime * 1000); 
                     playGloveCatchSound(targetCoord.x, targetCoord.z); 
 
