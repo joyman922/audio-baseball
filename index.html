@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.045</div>
+        <div class="version-text">2026-05-08 버전 1.046</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -874,17 +874,30 @@ const fielders = {
                 '3b': { x: -27.43, z: -27.43 }, 'c': { x: 0, z: 0 }
             };
 
-            let baseDest = coords[result.dir] || coords['cf'];
+let baseDest = coords[result.dir] || coords['cf'];
             let isOutfield = baseDest.z < -60;
             
-            // [수정] 투수/포수 뜬공은 중앙에서 벗어나지 않도록 x 산포도 0 처리
-            let scatterX = (result.dir === 'p' || result.dir === 'c') ? 0 : (isOutfield ? (Math.random() * 24 - 12) : (Math.random() * 6 - 3)); 
-            let scatterZ = (result.dir === 'p' || result.dir === 'c') ? 0 : (isOutfield ? (Math.random() * 20 - 10) : (Math.random() * 6 - 3));
+            let scatterX = 0;
+            let scatterZ = 0;
 
-let dest = {
+            if (result.dir === 'p' || result.dir === 'c') {
+                scatterX = 0; scatterZ = 0;
+            } else if (['past2b', 'cf', 'wall_c', 'texas_c', '2b'].includes(result.dir)) {
+                // [수정] 2루 베이스 스치는 타구나 센터 라인 타구는 넓게 퍼지지 않도록 X(좌우) 산포도를 ±4m 이내로 단단히 고정
+                scatterX = (Math.random() * 8 - 4);
+                scatterZ = isOutfield ? (Math.random() * 20 - 10) : (Math.random() * 6 - 3);
+            } else {
+                scatterX = isOutfield ? (Math.random() * 24 - 12) : (Math.random() * 6 - 3);
+                scatterZ = isOutfield ? (Math.random() * 20 - 10) : (Math.random() * 6 - 3);
+            }
+
+            let dest = {
                 x: baseDest.x + scatterX,
                 z: baseDest.z + scatterZ
             };
+
+
+
 
             let isFarDeflection = false;
 
