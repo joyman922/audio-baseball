@@ -263,9 +263,11 @@
                 gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
             }
 
-            // 송구음/타구음 끝날 때 뚝 끊기지 않고 0.15초 글리산도 페이드아웃 (포구음과 완벽히 겹침)
+// 송구음/타구음 끝날 때 뚝 끊기지 않고 0.4초 글리산도 페이드아웃 (자연스러운 여운)
             gain.gain.setValueAtTime(gain.gain.value, now + totalMoveTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.15); 
+            gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.4);
+
+
 
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; 
@@ -618,12 +620,12 @@
         async function executeInPlaySequence(result) {
             const now = audioCtx.currentTime;
 
-            const coords = {
+const coords = {
                 'c':  { x: 0, z: 0 }, 'p':  { x: 0, z: -18 },
                 '3b': { x: -35, z: -35 }, 'ss': { x: -15, z: -42 },     
                 '2b': { x: 0, z: -60 }, '1b': { x: 15, z: -42 },         
-                'lf': { x: -70, z: -100 }, 'cf': { x: 0, z: -130 },      
-                'rf': { x: 70, z: -100 }, '1b2b': { x: 22, z: -37 }, 
+                'lf': { x: -45, z: -100 }, 'cf': { x: 0, z: -130 },      
+                'rf': { x: 45, z: -100 }, '1b2b': { x: 22, z: -37 }, 
                 '23between': { x: -22, z: -37 }, 'past2b': { x: 0, z: -80 }, 
                 'texas_l': { x: -25, z: -70 }, 'texas_r': { x: 25, z: -70 },  
                 'line_l': { x: -45, z: -80 }, 'line_r': { x: 45, z: -80 },  
@@ -631,7 +633,7 @@
                 'wall_r': { x: 50, z: -130 }, 'wall_l_deep': { x: -45, z: -135 }, 
                 'wall_r_deep': { x: 45, z: -135 }, 'foul_c': { x: 0, z: 15 },
                 'foul_1b': { x: 40, z: -15 }, 'foul_3b': { x: -40, z: -15 },
-                'foul_lf': { x: -80, z: -80 }, 'foul_rf': { x: 80, z: -80 },
+                'foul_lf': { x: -50, z: -80 }, 'foul_rf': { x: 50, z: -80 },
                 'p3b': { x: -10, z: -20 }, 'ss_deep': { x: -18, z: -55 }, 
                 '3b_deep': { x: -35, z: -40 }, '2b_deep': { x: 18, z: -55 }, 
                 'p1b': { x: 10, z: -20 }, 'lc_deep': { x: -25, z: -135 },
@@ -639,6 +641,9 @@
                 // [추가] 내야를 가르는 깊은 타구용 외야 전용 좌표
                 'past1b2b': { x: 25, z: -80 }, 'past23between': { x: -25, z: -80 }
             };
+
+
+
 
             const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, '1b': {x: 15, z: -42}, '2b': {x: 0, z: -60},
@@ -725,17 +730,14 @@
                 chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
             }
 
-            // [수정] Z축 1 증가 시 Y축 2 상승하는 고도 동기화 (내야를 벗어난 후부터)
+// [수정] Y축 상승 코드를 제거하고 지면(Y=0)으로 고정하여 어그러짐(Warping) 현상 해결
             audioCtx.listener.positionX.setValueAtTime(0, now);
             
-            let targetY = 0;
-            if (dest.z < -54.86) {
-                targetY = Math.min(20, Math.max(0, (Math.abs(dest.z) - 54.86) * 2));
-            }
-            
-            audioCtx.listener.positionY.linearRampToValueAtTime(targetY, now + flightTime + chaseTime);
+            audioCtx.listener.positionY.setValueAtTime(0, now);
             // 리스너가 공의 약간 뒤(15m)를 추적하여 좌우 반전(Front/Back Flipping) 완벽 예방
-            audioCtx.listener.positionZ.linearRampToValueAtTime(Math.min(15, dest.z + 15), now + flightTime + chaseTime); 
+            audioCtx.listener.positionZ.linearRampToValueAtTime(Math.min(15, dest.z + 15), now + flightTime + chaseTime);
+
+
 
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
             
