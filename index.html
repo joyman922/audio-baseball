@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.043</div>
+        <div class="version-text">2026-05-08 버전 1.044</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -614,9 +614,8 @@ if (trajectory === 'fly') {
 
 pitchStartTime = performance.now() + 50; 
 
-                // [수정] 포수가 공을 잡은 시점(flightTime)으로부터 0.1초 뒤까지만 스윙 기회를 주고, 이후 심판 콜과 함께 스윙을 막음
-                pitchTimeout = setTimeout(() => {
-                    let umpireX = !isLeftBatter ? 2.5 : -2.5; // 홈 플레이트(1.5)보다 조금 더 뒤인 포수 뒤쪽 좌표
+pitchTimeout = setTimeout(() => {
+                    let umpireX = !isLeftBatter ? 2.5 : -2.5; 
                     
                     if (!hasSwung) {
                         if (isBunting) {
@@ -625,16 +624,19 @@ pitchStartTime = performance.now() + 50;
                             speak("번트 자세를 빼지 않아 스윙 처리됩니다.");
                             isBunting = false; 
                         } else {
-                            // 가만히 지켜본 경우 스트라이크/볼 콜
                             playUmpireSound(isStrike ? 'strike' : 'ball', umpireX, 0);
                         }
                     } else if (window.isMissedSwing) {
-                        // [수정] 헛스윙(빠름/볼/타이밍미스)을 한 경우, 포수 미트에 공이 들어간 직후에 구심이 스트라이크를 선언함 (즉시 콜 방지)
                         playUmpireSound('strike', umpireX, 0);
                     }
                     
-                    isPitching = false; 
                     window.isMissedSwing = false;
+                    
+                    // [수정] 심판의 아웃/세이프/스트라이크/볼 콜 음성이 완전히 끝난 후(1.5초 대기)에만 다음 투구를 진행할 수 있도록 블락 처리
+                    setTimeout(() => {
+                        isPitching = false; 
+                    }, 1500);
+
                 }, (flightTime + 0.1) * 1000); 
 
             }, 1000);
@@ -949,16 +951,19 @@ let dest = {
             }
 
 // [수정] 실제 프로야구 선수의 전력 질주 속도(초속 8.5m 내외)에 맞춰 외야수와 내야수의 이동 속도를 상향 조정
-            let fielderSpeed = isOutfield ? 8.5 : 8.0;
+
+
+// [수정] 수비수 이동 속도 현실화 (외야 7m/s, 내야 5m/s)
+            let fielderSpeed = isOutfield ? 7.0 : 5.0;
             let fielderRunTime = distToBall / fielderSpeed; 
 
             if (activeFielderKey === 'c') {
                 fielderRunTime = 0; 
             }
 
-let chaseTime = 0;
+            let chaseTime = 0;
             if (result.isDeflected || result.isDivingMiss) {
-                chaseTime = fielderRunTime; // 불규칙/뒤로 빠진 타구는 수비수가 달리는 시간 전체를 추격 시간으로 부여
+                chaseTime = fielderRunTime; 
             } else if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
                 chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
                 fielderRunTime = flightTime + chaseTime;
@@ -970,33 +975,18 @@ let chaseTime = 0;
                 fielderRunTime = flightTime + chaseTime;
             }
 
-
-
-
-
-
-            // [추가] 타격 직후 수비수가 공을 향해 뛰어가는 발소리 공간음향 스케줄링
             if (fielderRunTime > 0.1) {
                 playFielderSteps(fPos.x, fPos.z, dest.x, dest.z, fielderRunTime);
             }
 
-
-
-
-
-// [수정] Y축 상승 코드를 제거하고 지면(Y=0)으로 고정하여 어그러짐(Warping) 현상 해결
             audioCtx.listener.positionX.setValueAtTime(0, now);
             audioCtx.listener.positionY.setValueAtTime(0, now);
-            // [추가] Web Audio API의 순간이동(Snap) 버그 방지를 위해 현재 Z위치 고정(Anchor)
             audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
-            // 리스너가 공의 약간 뒤(15m)를 추적하여 좌우 반전(Front/Back Flipping) 완벽 예방
             audioCtx.listener.positionZ.linearRampToValueAtTime(Math.min(15, dest.z + 15), now + flightTime + chaseTime);
 
-
-playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
+            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
             
-            // [추가] 타구 궤적과 상황에 맞춘 바운스 사운드 자동 스케줄링 (오디오 정밀 예약 timeOffset 사용)
-            if (result.trajectory === 'ground') {
+            if (result.trajectory === 'ground' || result.isDivingMiss) {
                 playBounceSound(dest.x * 0.3, dest.z * 0.3, 0.15);
                 if (flightTime + chaseTime > 0.6) playBounceSound(dest.x * 0.6, dest.z * 0.6, 0.4);
             } else if (result.trajectory === 'wall') {
@@ -1009,18 +999,14 @@ playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, res
 
             speak(`타구 속도 ${result.vel}마일! ${result.msgInit}`);
 
-
-
-
             let timeToCatch = flightTime + chaseTime;
-            
             const getFielderName = (key) => {
                 const names = { 'p':'투수', 'c':'포수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수', 'lf':'좌익수', 'cf':'중견수', 'rf':'우익수' };
                 return names[key];
             };
             let caughtByName = getFielderName(activeFielderKey);
 
-if (result.trajectory === 'wall') {
+            if (result.trajectory === 'wall') {
                 await sleep(flightTime * 1000); 
                 playFenceSound(dest.x, dest.z);
                 speak("펜스 때립니다!");
@@ -1034,10 +1020,6 @@ if (result.trajectory === 'wall') {
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 백업 들어와 공 잡았습니다.`);
             } else if (['single', 'extra'].includes(result.type)) {
-
-
-
-
                 await sleep(flightTime * 1000);
                 if (chaseTime > 0) await sleep(chaseTime * 1000);
                 playGloveCatchSound(dest.x, dest.z);
@@ -1046,43 +1028,58 @@ if (result.trajectory === 'wall') {
                 await sleep(timeToCatch * 1000);
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
-
-} else {
-                // 뜬공, 파울 뜬공 등의 처리
+            } else {
                 await sleep(timeToCatch * 1000);
+                if (result.type !== 'foul_drop') playGloveCatchSound(dest.x, dest.z); 
                 
-                // [수정] 수비수가 잡지 못하고 떨어지는 파울(foul_drop)일 경우 글러브 포구음이 나지 않도록 차단
-                if (result.type !== 'foul_drop') {
-                    playGloveCatchSound(dest.x, dest.z); 
-                }
-                
-                // [수정] 아웃 처리가 되는 타구일 경우 포구 위치에서 심판이 아웃을 선언 (TTS에서 아웃 텍스트 제거)
                 if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes("아웃")) {
                     playUmpireSound('out', dest.x, dest.z);
                     let cleanedMsg = result.msgCatch.replace(/아웃!|아웃\./g, "").trim();
                     if (cleanedMsg) speak(cleanedMsg);
                 } else {
-                    // 파울 드롭의 경우 기존에 등록된 "쫓아갔으나 파울." 메시지 출력
                     speak(result.msgCatch); 
-                    
-                    // [추가] 벗어나는 파울 타구의 경우에도 구심이 홈 플레이트 뒤에서 스트라이크를 선언하도록 추가
-                    if (result.type === 'foul_drop') {
-                        playUmpireSound('strike', !isLeftBatter ? 2.5 : -2.5, 0);
-                    }
+                    if (result.type === 'foul_drop') playUmpireSound('strike', !isLeftBatter ? 2.5 : -2.5, 0);
                 }
             }
-
-
-
-
 
             if (['groundout', 'infield_hit', 'single', 'extra'].includes(result.type)) {
                 let fieldingTime = (dest.z < -60) ? 0.35 : 0.2; 
                 await sleep(fieldingTime * 1000); 
 
+                // [추가] 야구의 완전 능동적 주루 판단 시스템 (송구 직전 물리적 시간에 따른 주자 위치 계산)
+                let timeToThrow = timeToCatch + fieldingTime;
+                
+                let runnerTime1B = 27.43 / 8.0 + 0.4; 
+                let runnerTime2B = (27.43 * 2) / 8.0 + 0.4; 
+                let runnerTime3B = (27.43 * 3) / 8.0 + 0.4; 
+                let runnerTimeHome = (27.43 * 4) / 8.0 + 0.4;
+
                 let targetBase = '1b'; 
-                if (result.type === 'single') targetBase = '2b';
-                else if (result.type === 'extra') targetBase = (Math.random() < 0.7) ? '2b' : '3b';
+                let targetRunnerTime = runnerTime1B;
+                let prevBaseName = '홈';
+                let targetBaseName = '1루';
+
+                // 공을 잡고 던질 준비가 끝난 시점의 주자 위치를 파악하여 타겟 베이스 지정
+                if (timeToThrow < runnerTime1B - 0.5) {
+                    targetBase = '1b'; targetRunnerTime = runnerTime1B; prevBaseName = '홈'; targetBaseName = '1루';
+                } else if (timeToThrow < runnerTime2B - 0.5) {
+                    targetBase = '2b'; targetRunnerTime = runnerTime2B; prevBaseName = '1루'; targetBaseName = '2루';
+                } else if (timeToThrow < runnerTime3B - 0.5) {
+                    targetBase = '3b'; targetRunnerTime = runnerTime3B; prevBaseName = '2루'; targetBaseName = '3루';
+                } else {
+                    targetBase = 'c'; targetRunnerTime = runnerTimeHome; prevBaseName = '3루'; targetBaseName = '홈';
+                }
+
+                // 타구 종류(단타/장타)에 따른 진루 억제 한계치 설정
+                if (result.type === 'single') {
+                    if (targetBase === '3b' || targetBase === 'c') {
+                        targetBase = '2b'; targetRunnerTime = runnerTime2B; targetBaseName = '2루';
+                    }
+                } else if (result.type === 'extra') {
+                    if (targetBase === 'c') {
+                        targetBase = '3b'; targetRunnerTime = runnerTime3B; targetBaseName = '3루';
+                    }
+                }
 
                 let targetCoord = bases[targetBase];
                 let throwSpeedMph = (dest.z < -60) ? (85 + Math.random()*10) : (75 + Math.random()*10); 
@@ -1090,132 +1087,77 @@ if (result.trajectory === 'wall') {
                 let throwTime = distanceThrow / (throwSpeedMph * 0.44704);
                 if (throwTime < 0.2) throwTime = 0.2;
 
-// [수정] 수비수가 잡은 위치에서 송구
                 playBallFlightSound(dest.x, dest.z, targetCoord.x, targetCoord.z, throwTime, 0, throwSpeedMph, 'line', true); 
                 
-                // [수정] 카메라(Z축, Y축)가 송구를 따라 내야로 자연스럽게 미끄러져 복귀 (순간이동 버그 및 속도감 오류 완벽 해결)
                 let throwStart = audioCtx.currentTime;
                 audioCtx.listener.positionY.setValueAtTime(0, throwStart);
                 audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, throwStart);
                 audioCtx.listener.positionY.linearRampToValueAtTime(0, throwStart + throwTime);
-                // 타겟 베이스의 15m 뒤까지만 복귀하도록 수정 (15는 홈플레이트이므로, 기존에는 엄청난 속도로 카메라가 역주행했음)
                 audioCtx.listener.positionZ.linearRampToValueAtTime(targetCoord.z + 15, throwStart + throwTime);
 
-                let totalDefensiveTime = timeToCatch + fieldingTime + throwTime;
+                let totalDefensiveTime = timeToThrow + throwTime;
                 
-                let runnerTime1B = 27.43 / 8.0 + 0.4; 
-                let runnerTime2B = (27.43 * 2) / 8.0 + 0.4; 
-                let runnerTime3B = (27.43 * 3) / 8.0 + 0.4; 
+                let coverText = "";
+                if (targetBase === '1b') {
+                    if (activeFielderKey === '1b') coverText = " 투수 베이스 커버!"; 
+                    else if (activeFielderKey === '2b' && result.isDeflected && primaryFielder === '1b') coverText = " 투수 베이스 커버!"; 
+                } else if (targetBase === '2b') {
+                    if (activeFielderKey === 'ss') coverText = " 2루수 베이스 커버!";
+                    else if (activeFielderKey === '2b') coverText = " 유격수 베이스 커버!";
+                } else if (targetBase === '3b') {
+                    if (activeFielderKey === '3b') coverText = " 유격수 베이스 커버!";
+                }
 
-if (result.type === 'single') {
-                    if (timeToCatch + fieldingTime > runnerTime2B - 1.5) { // 타구 처리가 늦어질 경우 2루 도전
-                        speak(`타구 처리가 늦어집니다! 주자 1루 돌아 2루로 뜁니다! 2루로 송구!`);
-                        await sleep(throwTime * 1000);
-                        playGloveCatchSound(targetCoord.x, targetCoord.z);
-                        if (totalDefensiveTime < runnerTime2B) {
-                            playUmpireSound('out', targetCoord.x, targetCoord.z);
-                            speak(`아웃! 아쉽게 태그 아웃됩니다!`);
-                        } else {
-                            playUmpireSound('safe', targetCoord.x, targetCoord.z);
-                            speak(`세이프! 2루까지 들어갑니다!`);
-                        }
-                    } else {
-                        speak(`2루로 송구!`);
-                        await sleep(throwTime * 1000);
-                        playGloveCatchSound(targetCoord.x, targetCoord.z); 
-                        speak(`주자 1루에 멈춥니다.`);
-                    }
-                    await sleep(800); 
-                } else if (result.type === 'extra') {
-
-
-                    let targetRunnerTime = (targetBase === '2b') ? runnerTime2B : runnerTime3B;
-                    let prevBase = targetBase === '2b' ? '1루' : '2루';
-                    let targetName = targetBase === '2b' ? '2루' : '3루';
-                    
-                    // 주자 AI 능동 판단
-
-if (totalDefensiveTime < targetRunnerTime - 1.0) {
-                        speak(`송구가 빠릅니다. 주자 무리하지 않고 ${prevBase}로 귀루합니다. ${targetName}로 송구!`);
+                // 능동적 주루 판정 음성 출력 (단타/장타 상황)
+                if (['single', 'extra'].includes(result.type)) {
+                    if (totalDefensiveTime < targetRunnerTime - 1.0) {
+                        speak(`송구가 빠릅니다. 주자 ${prevBaseName}로 귀루합니다. ${targetBaseName}로 송구!${coverText}`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
                     } else if (totalDefensiveTime > targetRunnerTime + 1.5) {
-                        speak(`주자 계속 달립니다! ${targetName}로 송구!`);
+                        speak(`주자 계속 달립니다! ${targetBaseName}로 송구!${coverText}`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
-                        // [수정] 해당 베이스 위치에서 루심 오디오 출력 (여유 있는 세이프)
                         playUmpireSound('safe', targetCoord.x, targetCoord.z);
-                        // 군더더기 멘트(여유있게 들어갔습니다) 제거
                     } else {
-                        speak(`${targetName}로 송구! 접전입니다!`);
+                        speak(`${targetBaseName}로 송구! 접전입니다!${coverText}`);
                         await sleep(throwTime * 1000); 
                         playGloveCatchSound(targetCoord.x, targetCoord.z); 
-                        let isSafe = targetRunnerTime < totalDefensiveTime;
-                        if (isSafe) {
-                            // [수정] 접전 세이프 판정
+                        if (targetRunnerTime < totalDefensiveTime) {
                             playUmpireSound('safe', targetCoord.x, targetCoord.z);
-                            // 군더더기 멘트(베이스에 먼저 들어갔습니다) 제거
                         } else {
-                            // [수정] 접전 아웃 판정
                             playUmpireSound('out', targetCoord.x, targetCoord.z);
-                            // 군더더기 멘트(태그 보살입니다) 제거
                         }
                     }
                     await sleep(800);
-
-
-} else {
-                    let coverText = "";
-                    if (targetBase === '1b') {
-                        // [수정] 1루 커버 디테일 최종 교정
-                        if (activeFielderKey === '1b') {
-                            coverText = " 투수 베이스 커버!"; // 1루수가 직접 타구를 쫓아 포구했을 때
-                        } else if (activeFielderKey === '2b' && result.isDeflected && primaryFielder === '1b') {
-                            coverText = " 투수 베이스 커버!"; // 1루수 맞고 굴절되어 2루수가 잡았을 때 (1루 비어있음)
-                        } 
-                        // 유격수 맞고 굴절되어 2루수가 잡았을 땐 1루수가 베이스에 있으므로 정상 포구 (커버 멘트 생략)
-                    }
-                    speak(`1루로 송구!${coverText}`);
-
-
-
-
-
-
+                } else {
+                    // 내야 땅볼 아웃/안타 판정
+                    speak(`${targetBaseName}로 송구!${coverText}`);
                     await sleep(throwTime * 1000); 
                     playGloveCatchSound(targetCoord.x, targetCoord.z); 
 
-                    let isSafe = runnerTime1B < totalDefensiveTime;
-                    if (isSafe) {
-                        // [수정] 1루 세이프 판정
+                    if (targetRunnerTime < totalDefensiveTime) {
                         playUmpireSound('safe', targetCoord.x, targetCoord.z);
                         speak(`내야 안타!`);
                     } else {
-                        // [수정] 1루 아웃 판정
                         playUmpireSound('out', targetCoord.x, targetCoord.z);
-                        // 군더더기 멘트(타자 주자 처리됩니다) 제거
                     }
                     await sleep(800); 
                 }
-
-
-
-
-
 
             } else {
                 await sleep(1500); 
             }
 
-
-
-
-
-
             updateListenerPosition(false); 
             isInPlay = false; 
             speak("타석 복귀.");
         }
+
+
+
+
+
 
         function swingBat(swingType = 'normal') {
             if (!isPitching && !isInPlay) { 
@@ -1261,22 +1203,22 @@ if (isPitching && pitchStartTime === 0) {
 
 
 
-            else if (result.type === 'foul') {
+else if (result.type === 'foul') {
                 handleHitFadeOut(); clearTimeout(pitchTimeout);
                 playBatFoulSound(); 
                 
-                // [수정] 파울 시 구심의 스트라이크 콜 연동 및 TTS 분리
-                playUmpireSound('strike', !isLeftBatter ? 2.5 : -2.5, 0); 
-                
-                // 빗맞은 제자리 파울은 "커트.", 벗어나는 타구는 "파울." 출력
+                // 심판의 스트라이크 콜을 제거하여 아웃으로 혼동하는 현상 방지
                 if (result.msg.includes("커트")) {
                     speak("커트.");
                 } else {
                     speak("파울.");
                 }
-                isPitching = false;
+                
+                // 음성 안내 길이에 맞춰 대기 시간 단축
+                setTimeout(() => {
+                    isPitching = false;
+                }, 1200);
             }
-
 
 
 
