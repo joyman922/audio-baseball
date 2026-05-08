@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.037</div>
+        <div class="version-text">2026-05-08 버전 1.039</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -90,8 +90,14 @@
             glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
             foul1: "foul1.ogg", bunt: "bunt.ogg",
             swing1: "swing1.ogg", swing2: "swing2.ogg", walk1: "walk1.ogg",
-            bound: "bound.ogg", fence: "fence.ogg"
+            bounce: "bounce.ogg", fence: "fence.ogg",
+            // [추가] 투수 와인드업 및 심판 판정 오디오 추가
+            pitcher: "pitcher.ogg",
+            umpire_ball: "umpire3-0-0.ogg", umpire_strike: "umpire3-1-0.ogg",
+            umpire_safe1: "umpire3-2-0.ogg", umpire_safe2: "umpire3-2-1.ogg",
+            umpire_out: "umpire3-3-0.ogg"
         };
+
 
 
         async function loadSound(name, url) {
@@ -141,6 +147,7 @@
             return isLeftBatter ? (boxStep * -0.45) : (boxStep * 0.45);
         }
 
+// [수정] 타격 시 투구/바람 소리를 즉시(0.02초) 차단하여 빈틈없이 타격감을 극대화 (오디오 공백 없음)
         function handleHitFadeOut() {
             const now = audioCtx.currentTime;
             activeNodes.forEach(node => {
@@ -148,8 +155,9 @@
                     if (node.type === 'pitch' || node.type === 'inplay') {
                         node.gain.cancelScheduledValues(now);
                         node.gain.setValueAtTime(node.gain.value, now);
-                        node.gain.exponentialRampToValueAtTime(0.001, now + 0.3); 
-                        node.src.stop(now + 0.35); 
+                        // 0.3초였던 페이드아웃을 0.02초로 단축시켜 타격음과 겹치는 지저분한 소리를 즉시 날려버림
+                        node.gain.exponentialRampToValueAtTime(0.001, now + 0.02); 
+                        node.src.stop(now + 0.05); 
                     } else if (node.type === 'mitt') {
                         node.src.stop(now); 
                     }
@@ -157,6 +165,8 @@
             });
             activeNodes = [];
         }
+
+
 
         function stopAllActiveNodes() {
             activeNodes.forEach(node => { try { node.src.stop(); } catch(e) {} });
@@ -221,15 +231,41 @@
             }
         }
 
+// [수정] 외야에서 떨어지는 바운스도 잘 들리도록 거리와 볼륨 감쇄 최적화
         function playBounceSound(x, z) {
             const panner = audioCtx.createPanner();
-            panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 150;
+            panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
             panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 0; 
             if (audioBuffers["bounce"]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["bounce"];
                 src.connect(panner); panner.connect(audioCtx.destination); src.start();
             }
         }
+
+        // [추가] 3D 공간 음향이 적용된 심판 판정 소리 출력 함수
+        function playUmpireSound(type, x, z) {
+            const panner = audioCtx.createPanner();
+            panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
+            // 심판의 입 높이를 고려하여 Y축 1.5m 설정
+            panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 1.5; 
+
+            let bufferName = "";
+            if (type === 'ball') bufferName = "umpire_ball";
+            else if (type === 'strike') bufferName = "umpire_strike";
+            else if (type === 'out') bufferName = "umpire_out";
+            else if (type === 'safe') bufferName = Math.random() < 0.5 ? "umpire_safe1" : "umpire_safe2";
+
+            if (audioBuffers[bufferName]) {
+                const src = audioCtx.createBufferSource(); src.buffer = audioBuffers[bufferName];
+                const gain = audioCtx.createGain(); gain.gain.value = 1.5; // 심판 목소리 볼륨 증폭
+                src.connect(panner); panner.connect(gain); gain.connect(audioCtx.destination); src.start();
+            }
+        }
+
+
+
+
+
 
         function playFenceSound(x, z) {
             const panner = audioCtx.createPanner();
@@ -401,8 +437,8 @@ if (trajectory === 'fly') {
             else if (aimZ_obj.val <= -2) locStr = "바깥쪽";
             else locStr = "가운데";
 
-            let callStr = isStrike ? "스트라이크" : "볼";
-            pitchResultText = `${locStr} ${callStr}, ${pitchSpeedMph}마일`;
+// [수정] 코스 및 속도를 알려주던 TTS 문구 삭제 처리
+            pitchResultText = "";
 
             let midiNote = 60 + (aimZ_obj.noteIdx - 3) + ((aimY_obj.octIdx - 2) * 12);
             let pitchBuffer = null;
@@ -419,12 +455,36 @@ if (trajectory === 'fly') {
                 } catch(e) {}
             }
 
-            speak("와인드업");
+            let startX = !isLeftBatter ? -18 : 18; 
+            const now = audioCtx.currentTime;
+
+            // [추가] 타격 투구 위치(마운드)에서 재생되는 와인드업 오디오 적용
+            const pannerWindup = audioCtx.createPanner();
+            pannerWindup.panningModel = 'HRTF'; pannerWindup.distanceModel = 'linear'; pannerWindup.refDistance = 1; pannerWindup.maxDistance = 1000; pannerWindup.rolloffFactor = 0.05;
+            pannerWindup.positionX.value = startX; pannerWindup.positionZ.value = 0; pannerWindup.positionY.value = 1.5;
+
+            if (audioBuffers["pitcher"]) {
+                const srcPitcher = audioCtx.createBufferSource(); srcPitcher.buffer = audioBuffers["pitcher"];
+                srcPitcher.connect(pannerWindup); pannerWindup.connect(audioCtx.destination);
+                srcPitcher.start(now);
+            }
+
+            // [추가] 투수 발소리를 공 출발(now + 1.05초)의 정확히 0.1초 전인 0.95초 시점에 예약 재생
+            if (audioBuffers["walk1"]) {
+                const srcStep = audioCtx.createBufferSource(); srcStep.buffer = audioBuffers["walk1"];
+                srcStep.connect(pannerWindup); pannerWindup.connect(audioCtx.destination);
+                srcStep.start(now + 0.95); 
+            }
 
             setTimeout(() => {
                 const startTime = audioCtx.currentTime + 0.05; 
                 const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
+
+
+
+
                 
+
                 let flightSrc;
                 if (pitchBuffer) {
                     flightSrc = audioCtx.createBufferSource();
@@ -526,24 +586,32 @@ if (trajectory === 'fly') {
                     }
                 }
 
-                pitchStartTime = performance.now() + 50; 
+pitchStartTime = performance.now() + 50; 
 
+                // [수정] 포수가 공을 잡은 시점(flightTime)으로부터 0.1초 뒤까지만 스윙 기회를 주고, 이후 심판 콜과 함께 스윙을 막음
                 pitchTimeout = setTimeout(() => {
                     if (!hasSwung) {
+                        let umpireX = !isLeftBatter ? 2.5 : -2.5; // 홈 플레이트(1.5)보다 조금 더 뒤인 포수 뒤쪽 좌표
+                        
                         if (isBunting) {
                             playSwingSound(); 
-                            speak("헛스윙! 번트 자세를 빼지 않아 스윙 처리됩니다.");
+                            playUmpireSound('strike', umpireX, 0);
+                            speak("번트 자세를 빼지 않아 스윙 처리됩니다.");
                             isBunting = false; 
                         } else {
-                            speak(pitchResultText); 
+                            // TTS 대신 포수 뒤에서 나는 구심의 스트라이크/볼 콜
+                            playUmpireSound(isStrike ? 'strike' : 'ball', umpireX, 0);
                         }
                     }
-                }, (flightTime + 0.05) * 1000); 
-
-                setTimeout(() => { isPitching = false; }, (flightTime + 0.5) * 1000);
+                    isPitching = false; // 0.1초가 지나면 투구 턴을 강제 종료하여 늦은 스윙을 원천 차단함
+                }, (flightTime + 0.1) * 1000); 
 
             }, 1000);
         }
+
+
+
+
 
         function calculateHitResult(swingType, timeDiff) {
             let r = Math.random() * 100;
@@ -596,10 +664,9 @@ if (trajectory === 'fly') {
             }
 
 if (swingType === 'big') {
-                if (timeDiff <= 40) { 
+                if (timeDiff <= 25) { // [수정] 큰 스윙 정타 범위 축소
                     if (r < 15) return hitOF('hr', 'wall_c', getVel(100, 115), "가운데 뻗어가는 타구!", "담장 넘어가는 홈런!", 'fly');
                     if (r < 25) return hitOF('hr', 'wall_l', getVel(100, 115), "좌측 담장 향해 날아갑니다!", "홈런!", 'fly');
-                    // [추가] 가운데 담장 직격 2루타 및 좌/중/우 외야 워닝트랙 깊은 뜬공 아웃 추가
                     if (r < 35) return hitOF('extra', 'wall_c', getVel(95, 110), "가운데 담장 직격하는 타구!", "", 'wall'); 
                     if (r < 45) return hitOF('extra', 'wall_r_deep', getVel(95, 110), "우측 깊숙한 타구!", "", 'wall'); 
                     if (r < 55) return hitOF('extra', 'lc_deep', getVel(95, 110), "좌중간 완전히 가르는 타구!", "", 'wall');
@@ -608,10 +675,7 @@ if (swingType === 'big') {
                     if (r < 85) return outCatch('wall_l', getVel(90, 105), "좌측 담장 앞!", "좌익수 워닝트랙에서 잡습니다!", 'fly');
                     if (r < 95) return outCatch('wall_r', getVel(90, 105), "우측 뻗어가는 타구!", "우익수 뒤로 물러나며 펜스 앞에서 캐치!", 'fly');
                     return outCatch('cf', getVel(85, 105), "가운데 솟구친 타구!", "중견수가 잡아냅니다.", 'fly');
-                } else if (timeDiff <= 60) {
-
-
-
+                } else if (timeDiff <= 60) { // [수정] 정타에서 줄어든 15의 범위가 자동으로 이 범타 구간에 포함됨
                     if (r < 25) return hitOF('single', 'past1b2b', getVel(85, 100), "1,2루간 날카로운 타구!", "", 'line');
                     if (r < 45) return hardHitInfield(getVel(85, 105)); 
                     if (r < 60) return grounder('ss_deep', getVel(70, 90), "3유간 깊은 곳 타구!", "", false);
@@ -621,30 +685,30 @@ if (swingType === 'big') {
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             } 
             else if (swingType === 'short') {
-                if (timeDiff <= 40) { 
+                if (timeDiff <= 45) { // [수정] 짧은 스윙 정타 범위 확대
                     if (r < 30) return hitOF('single', 'texas_l', getVel(80, 95), "좌측 애매한 위치 뜹니다!", "", 'fly');
                     if (r < 50) return hitOF('single', 'texas_r', getVel(80, 95), "우측 얕은 곳 향합니다!", "", 'fly');
                     if (r < 75) return hitOF('extra', 'line_r', getVel(85, 100), "1루 선상 뻗어가는 타구!", "", 'line');
                     if (r < 90) return outCatch('lf', getVel(80, 100), "좌익수 앞 짧은 타구!", "좌익수 다이빙 캐치!", 'fly');
                     return grounder('2b', getVel(75, 95), "2루수 정면 땅볼!", "", false);
-                } else if (timeDiff <= 65) { 
+                } else if (timeDiff <= 75) { // [수정] 범타 범위 10 추가 
                     if (r < 25) return hardHitInfield(getVel(70, 90));
                     if (r < 50) return pitcherAmbiguousHit(getVel(60, 85)); 
                     if (r < 70) return catcherPopFoul(getVel(65, 85));
                     return grounder('1b', getVel(60, 85), "1루수 앞 땅볼!", "", false);
-                } else if (timeDiff <= 90) { 
+                } else if (timeDiff <= 100) { // [수정] 빗맞은 타구 범위 10 추가
                     if (r < 65) return { inPlay: false, type: 'foul', msg: "커트! 파울." }; 
                     return grounder('1b2b', getVel(50, 75), "1,2루간 땅볼!", "", false);
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             }
             else { 
-                if (timeDiff <= 40) { 
+                if (timeDiff <= 35) { // [수정] 일반 스윙 정타 범위 축소
                     if (r < 35) return hitOF('single', 'past1b2b', getVel(85, 105), "1,2루간 강한 타구!", "", 'line');
                     if (r < 55) return hitOF('extra', 'wall_l_deep', getVel(90, 110), "좌측 깊숙한 타구!", "", 'wall');
                     if (r < 75) return hardHitInfield(getVel(90, 105)); 
                     return grounder('3b', getVel(85, 100), "3루수 정면 굴러갑니다!", "", false);
-                } else if (timeDiff <= 55) { 
+                } else if (timeDiff <= 55) { // [수정] 정타에서 줄어든 5의 범위가 자동으로 이 범타 구간에 포함됨
                     if (r < 40) return hitOF('single', 'past2b', getVel(80, 95), "2루 베이스 스치는 타구!", "", 'line');
                     if (r < 60) return outCatch('2b', getVel(75, 90), "2루수 키 넘을 듯한 타구!", "2루수 점프 캐치! 아웃!", 'line'); 
                     return grounder('ss', getVel(70, 90), "유격수 땅볼!", "", false);
@@ -658,6 +722,12 @@ if (swingType === 'big') {
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             }
+
+
+
+
+
+
         }
 
 // [추가] 수비수 발소리 (공간 음향 적용, 0.3초 간격 재생)
@@ -852,9 +922,26 @@ const fielders = {
             audioCtx.listener.positionZ.linearRampToValueAtTime(Math.min(15, dest.z + 15), now + flightTime + chaseTime);
 
 
-            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
+playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
             
+            // [추가] 타구 궤적과 상황에 맞춘 바운스 사운드 자동 스케줄링
+            if (result.trajectory === 'ground') {
+                // 땅볼은 타격 직후 내야를 굴러가는 바운스 즉시 발생 (공간적으로 앞으로 나아감)
+                setTimeout(() => playBounceSound(dest.x * 0.3, dest.z * 0.3), 150);
+                if (flightTime + chaseTime > 0.6) setTimeout(() => playBounceSound(dest.x * 0.6, dest.z * 0.6), 400);
+            } else if (result.trajectory === 'wall') {
+                // 펜스 직격 타구는 공중을 날아가 펜스를 때리고 0.3초 뒤 워닝트랙 바닥에 떨어짐
+                setTimeout(() => playBounceSound(dest.x, dest.z), (flightTime + 0.3) * 1000);
+            } else if (['single', 'extra', 'foul_drop'].includes(result.type)) {
+                // 내야수 키 넘기는 안타, 텍사스성 안타, 파울 플라이 낙구 등은 체공시간이 끝나는 정확한 순간에 바운스
+                setTimeout(() => playBounceSound(dest.x, dest.z), flightTime * 1000);
+            } else if (result.isDeflected) {
+                // 내야수 맞고 굴절된 타구는 맞은 위치 부근에서 바닥으로 떨어짐
+                setTimeout(() => playBounceSound(dest.x, dest.z + 15), flightTime * 1000);
+            }
+
             speak(`타구 속도 ${result.vel}마일! ${result.msgInit}`);
+
 
             let timeToCatch = flightTime + chaseTime;
             
@@ -864,7 +951,7 @@ const fielders = {
             };
             let caughtByName = getFielderName(activeFielderKey);
 
-            if (result.trajectory === 'wall') {
+if (result.trajectory === 'wall') {
                 await sleep(flightTime * 1000); 
                 playFenceSound(dest.x, dest.z);
                 speak("펜스 때립니다!");
@@ -886,11 +973,35 @@ const fielders = {
                 await sleep(timeToCatch * 1000);
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
-            } else {
+
+} else {
+                // 뜬공, 파울 뜬공 등의 처리
                 await sleep(timeToCatch * 1000);
-                playGloveCatchSound(dest.x, dest.z); 
-                speak(result.msgCatch);
+                
+                // [수정] 수비수가 잡지 못하고 떨어지는 파울(foul_drop)일 경우 글러브 포구음이 나지 않도록 차단
+                if (result.type !== 'foul_drop') {
+                    playGloveCatchSound(dest.x, dest.z); 
+                }
+                
+                // [수정] 아웃 처리가 되는 타구일 경우 포구 위치에서 심판이 아웃을 선언 (TTS에서 아웃 텍스트 제거)
+                if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes("아웃")) {
+                    playUmpireSound('out', dest.x, dest.z);
+                    let cleanedMsg = result.msgCatch.replace(/아웃!|아웃\./g, "").trim();
+                    if (cleanedMsg) speak(cleanedMsg);
+                } else {
+                    // 파울 드롭의 경우 기존에 등록된 "쫓아갔으나 파울." 메시지 출력
+                    speak(result.msgCatch); 
+                    
+                    // [추가] 벗어나는 파울 타구의 경우에도 구심이 홈 플레이트 뒤에서 스트라이크를 선언하도록 추가
+                    if (result.type === 'foul_drop') {
+                        playUmpireSound('strike', !isLeftBatter ? 2.5 : -2.5, 0);
+                    }
+                }
             }
+
+
+
+
 
             if (['groundout', 'infield_hit', 'single', 'extra'].includes(result.type)) {
                 let fieldingTime = (dest.z < -60) ? 0.35 : 0.2; 
@@ -916,9 +1027,6 @@ const fielders = {
                 audioCtx.listener.positionY.linearRampToValueAtTime(0, throwStart + throwTime);
                 // 타겟 베이스의 15m 뒤까지만 복귀하도록 수정 (15는 홈플레이트이므로, 기존에는 엄청난 속도로 카메라가 역주행했음)
                 audioCtx.listener.positionZ.linearRampToValueAtTime(targetCoord.z + 15, throwStart + throwTime);
-
-
-
 
                 let totalDefensiveTime = timeToCatch + fieldingTime + throwTime;
                 
@@ -946,16 +1054,22 @@ const fielders = {
                         speak(`주자 계속 달립니다! ${targetName}로 송구!`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
-                        speak(`주자 넉넉하게 세이프!`);
+                        // [수정] 해당 베이스 위치에서 루심 오디오 출력 (여유 있는 세이프)
+                        playUmpireSound('safe', targetCoord.x, targetCoord.z);
+                        speak(`여유있게 들어갔습니다.`);
                     } else {
                         speak(`${targetName}로 송구! 접전입니다!`);
                         await sleep(throwTime * 1000); 
                         playGloveCatchSound(targetCoord.x, targetCoord.z); 
                         let isSafe = targetRunnerTime < totalDefensiveTime;
                         if (isSafe) {
-                            speak(`세이프! 베이스에 먼저 들어갔습니다!`);
+                            // [수정] 접전 세이프 판정
+                            playUmpireSound('safe', targetCoord.x, targetCoord.z);
+                            speak(`베이스에 먼저 들어갔습니다!`);
                         } else {
-                            speak(`아웃! 태그 아웃! 보살입니다!`);
+                            // [수정] 접전 아웃 판정
+                            playUmpireSound('out', targetCoord.x, targetCoord.z);
+                            speak(`태그 보살입니다!`);
                         }
                     }
                     await sleep(800);
@@ -971,15 +1085,24 @@ const fielders = {
 
                     let isSafe = runnerTime1B < totalDefensiveTime;
                     if (isSafe) {
-                        speak(`세이프! 내야 안타!`);
+                        // [수정] 1루 세이프 판정
+                        playUmpireSound('safe', targetCoord.x, targetCoord.z);
+                        speak(`내야 안타!`);
                     } else {
-                        speak(`아웃! 1루에서 아웃입니다!`);
+                        // [수정] 1루 아웃 판정
+                        playUmpireSound('out', targetCoord.x, targetCoord.z);
+                        speak(`타자 주자 처리됩니다.`);
                     }
                     await sleep(800); 
                 }
             } else {
                 await sleep(1500); 
             }
+
+
+
+
+
 
             updateListenerPosition(false); 
             isInPlay = false; 
@@ -1017,24 +1140,46 @@ const fielders = {
 
             let result = calculateHitResult(swingType, timeDiff);
 
-            if (result.type === 'miss') {
-                playSwingSound(); speak(result.msg);
-                setTimeout(() => { isPitching = false; }, 1000);
+if (result.type === 'miss') {
+                playSwingSound(); 
+                // [수정] 헛스윙 시 TTS를 없애고 구심이 스트라이크를 외침
+                playUmpireSound('strike', !isLeftBatter ? 2.5 : -2.5, 0); 
+                isPitching = false;
             } 
+
             else if (result.type === 'foul') {
                 handleHitFadeOut(); clearTimeout(pitchTimeout);
-                playBatFoulSound(); speak(result.msg);
-                setTimeout(() => { isPitching = false; }, 1000);
-            } 
+                playBatFoulSound(); 
+                
+                // [수정] 파울 시 구심의 스트라이크 콜 연동 및 TTS 분리
+                playUmpireSound('strike', !isLeftBatter ? 2.5 : -2.5, 0); 
+                
+                // 빗맞은 제자리 파울은 "커트.", 벗어나는 타구는 "파울." 출력
+                if (result.msg.includes("커트")) {
+                    speak("커트.");
+                } else {
+                    speak("파울.");
+                }
+                isPitching = false;
+            }
+
+
+
 
 else if (result.inPlay) {
                 handleHitFadeOut(); clearTimeout(pitchTimeout);
                 isPitching = false; isInPlay = true; 
-                // [수정] 타구 속도와 무관하게, 타격 타이밍이 가장 정확한 구간(timeDiff <= 40)에서만 정타 사운드 재생
-                let isPowerHit = (timeDiff <= 40);
+                
+                // [수정] 각 스윙 종류에 따라 완전히 달라진 정타(최적 타이밍) 범위에 맞춰 파워힛 사운드 조건 개별 적용
+                let isPowerHit = false;
+                if (swingType === 'big' && timeDiff <= 25) isPowerHit = true;
+                else if (swingType === 'short' && timeDiff <= 45) isPowerHit = true;
+                else if (swingType !== 'big' && swingType !== 'short' && timeDiff <= 35) isPowerHit = true;
+
                 playHitSound(false, isPowerHit); 
                 executeInPlaySequence(result); 
             }
+
 
 
 
