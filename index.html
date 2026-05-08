@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.030 (수비 통과 요격 시스템, 맑은 글러브음, 8m/s 정밀 주루 밸런스 패치)</div>
+        <div class="version-text">2026-05-08 버전 1.031 (수비 X축 범위 할당, Y축 고도비율 1:2 적용 및 송구 오버랩 패치)</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -83,6 +83,7 @@
         const audioBuffers = {}; 
         const pitchBufferCache = {}; 
         
+        // 탁한 포구음(glove3) 제외, 명확한 1, 2번만 사용
         const SOUND_URLS = { 
             hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
             glove1: "glove1.ogg", glove2: "glove2.ogg",
@@ -252,7 +253,7 @@
 
             if (isThrow) {
                 baseFreq = 1000; 
-                peakVol = 0.15; 
+                peakVol = 0.15; // 송구 볼륨 적정 수준(1/3) 유지
             }
 
             const filter = audioCtx.createBiquadFilter(); filter.type = "bandpass"; 
@@ -271,8 +272,14 @@
                 gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
             }
 
-            gain.gain.setValueAtTime(gain.gain.value, now + totalMoveTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.5); 
+            // [수정] 송구음 도착 시 0.15초 오버랩 후 글리산도 페이드아웃
+            if (isThrow) {
+                gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
+                gain.gain.linearRampToValueAtTime(0.001, now + totalMoveTime + 0.15); 
+            } else {
+                gain.gain.setValueAtTime(gain.gain.value, now + totalMoveTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.5); 
+            }
 
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; 
@@ -291,12 +298,17 @@
 
             src.connect(filter); filter.connect(gain); gain.connect(panner); panner.connect(audioCtx.destination);
             src.start(now); 
-            src.stop(now + totalMoveTime + 0.6); 
+            
+            if (isThrow) {
+                src.stop(now + totalMoveTime + 0.2); 
+            } else {
+                src.stop(now + totalMoveTime + 0.6); 
+            }
             
             activeNodes.push({ type: 'inplay', src: src, gain: gain });
         }
 
-        // [수정] 명확한 글러브 소리만 출력되도록 1과 2로 고정
+        // [수정] 탁한 포구음 제외, 맑은 소리만 출력
         function playGloveCatchSound(x, z) {
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 150;
@@ -540,7 +552,7 @@
                 
                 if (rand < 0.3) return outCatch(dir, vel, `${dirName} 강한 타구!`, `${infielder} 직선타 아웃!`, 'line');
                 if (rand < 0.6) return grounder(dir, vel, `${dirName} 강습 타구!`, `${infielder} 맞고 굴절!`, true, true);
-                return hitOF('single', dir, vel, `${dirName} 뚫는 타구!`, ``, 'line');
+                return hitOF('single', dir, vel, `${dirName} 빠져나가는 타구!`, ``, 'line');
             };
 
             const pitcherAmbiguousHit = (vel) => {
@@ -637,6 +649,7 @@
                 'rc_deep': { x: 25, z: -135 }
             };
 
+            // [수정] 2루수 베이스 뒤 위치 (x:0), 중견수 깊게 배치(z: -115)
             const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, '1b': {x: 15, z: -42}, '2b': {x: 0, z: -60},
                 '3b': {x: -35, z: -35}, 'ss': {x: -15, z: -42}, 
@@ -672,14 +685,10 @@
             else if (['rf', 'wall_r', 'wall_r_deep', 'line_r', 'texas_r', 'foul_rf'].includes(result.dir)) primaryFielder = 'rf';
             else if (['c', 'foul_c'].includes(result.dir)) primaryFielder = 'c';
             
-            // [수정] 내야 통과 요격 (Intercept) 시스템 - 외야로 뻗어가는 공은 내야수 수비 권한 완전 박탈
+            // [수정] 수비 통과(Intercept) 분할: 1,2루간 타구 외야 진입 시 우익수 등 외야수가 강제 전담
             if (isOutfield) {
-                let distToLf = Math.sqrt(Math.pow(dest.x - fielders['lf'].x, 2) + Math.pow(dest.z - fielders['lf'].z, 2));
-                let distToCf = Math.sqrt(Math.pow(dest.x - fielders['cf'].x, 2) + Math.pow(dest.z - fielders['cf'].z, 2));
-                let distToRf = Math.sqrt(Math.pow(dest.x - fielders['rf'].x, 2) + Math.pow(dest.z - fielders['rf'].z, 2));
-                
-                if (distToLf <= distToCf && distToLf <= distToRf) primaryFielder = 'lf';
-                else if (distToRf <= distToCf && distToRf <= distToLf) primaryFielder = 'rf';
+                if (dest.x < -15) primaryFielder = 'lf';
+                else if (dest.x > 15) primaryFielder = 'rf';
                 else primaryFielder = 'cf';
             }
 
@@ -694,9 +703,9 @@
             let activeFielderKey = result.isDeflected ? backupFielder : primaryFielder;
             let fPos = fielders[activeFielderKey];
             
-            // [수정] 정확한 물리 엔진 기반 비행 시간 계산 (거리 / 초속)
+            // [수정] 속도 비례 정밀 체공 시간 공식 (거리/속도)
             let distToDest = Math.sqrt(Math.pow(dest.x, 2) + Math.pow(dest.z, 2));
-            let speedMs = result.vel * 0.44704; // 마일을 초속(m/s)으로 변환
+            let speedMs = result.vel * 0.44704; 
             let flightTime = distToDest / speedMs;
             
             if (result.trajectory === 'fly') flightTime *= 1.8; 
@@ -707,12 +716,10 @@
 
             let distToBall = Math.sqrt(Math.pow(dest.x - fPos.x, 2) + Math.pow(dest.z - fPos.z, 2));
             
-            // [수정] 롤링 물리 공식: 외야로 굴러오는 공은 외야수가 뛸 거리를 스스로 좁혀줌 (60% 굴러옴)
             if (['single'].includes(result.type) && isOutfield) {
                 distToBall *= 0.4; 
             }
 
-            // [수정] 외야수 달리기 속도 6.0m/s로 현실화 (장타 확률 보장)
             let fielderSpeed = isOutfield ? 6.0 : 7.0;
             let fielderRunTime = distToBall / fielderSpeed; 
 
@@ -725,9 +732,16 @@
                 chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
             }
 
-            // [수정] Z축 카메라 완벽 동기화. 내야를 지나는 순간 공을 따라 시야가 전진.
+            // [수정] Z값 1 이동 시 Y값 2 상승 알고리즘 (최대 20m)
             audioCtx.listener.positionX.setValueAtTime(0, now);
             audioCtx.listener.positionY.setValueAtTime(0, now);
+            
+            let targetY = 0;
+            if (dest.z < -54.86) {
+                targetY = Math.min(20, (Math.abs(dest.z) - 54.86) * 2);
+            }
+            
+            audioCtx.listener.positionY.linearRampToValueAtTime(targetY, now + flightTime + chaseTime);
             audioCtx.listener.positionZ.linearRampToValueAtTime(dest.z, now + flightTime + chaseTime); 
 
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
@@ -748,7 +762,7 @@
                 speak("펜스 직접 때립니다!");
                 if (chaseTime > 0) await sleep(chaseTime * 1000);
                 playGloveCatchSound(dest.x, dest.z);
-                speak(`${caughtByName} 공 잡았습니다.`);
+                speak(`${caughtByName} 잡자마자 송구!`);
             } else if (result.isDeflected) {
                 await sleep(flightTime * 1000); 
                 speak(`${result.msgDeflect}`);
@@ -784,17 +798,17 @@
                 let throwTime = distanceThrow / (throwSpeedMph * 0.44704);
                 if (throwTime < 0.2) throwTime = 0.2;
 
-                // [수정] 수비수가 공을 주운 위치(dest)에서부터 베이스로 던지는 뚜렷한 스테레오 패닝 송구
+                // [수정] 수비수가 던지는 위치에서 목적지로의 공간 사운드 이동
                 playBallFlightSound(dest.x, dest.z, targetCoord.x, targetCoord.z, throwTime, 0, throwSpeedMph, 'line', true); 
                 
-                // [수정] 카메라(Z축)가 송구 속도에 맞춰 자연스럽게 내야로 미끄러져 내려옴
+                // [수정] 송구 시 3D 카메라 Y, Z축 동반 하강 복귀
                 let throwStart = audioCtx.currentTime;
-                audioCtx.listener.positionZ.linearRampToValueAtTime(targetCoord.z, throwStart + throwTime);
+                audioCtx.listener.positionY.linearRampToValueAtTime(0, throwStart + throwTime);
+                audioCtx.listener.positionZ.linearRampToValueAtTime(15, throwStart + throwTime);
 
                 let totalDefensiveTime = timeToCatch + fieldingTime + throwTime;
                 
-                // [수정] 27.43m 야구 베이스 정규 간격 기준 8.0m/s 주루 물리 공식 반영
-                let runnerTime1B = 27.43 / 8.0 + 0.4; // 스윙 후 출발 지연시간 포함
+                let runnerTime1B = 27.43 / 8.0 + 0.4; 
                 let runnerTime2B = (27.43 * 2) / 8.0 + 0.4; 
                 let runnerTime3B = (27.43 * 3) / 8.0 + 0.4; 
 
@@ -809,14 +823,13 @@
                     let prevBase = targetBase === '2b' ? '1루' : '2루';
                     let targetName = targetBase === '2b' ? '2루' : '3루';
                     
-                    // 주자 AI 능동 판단 및 TTS 브리핑 철저 분리
                     if (totalDefensiveTime < targetRunnerTime - 1.0) {
                         speak(`송구가 빠릅니다. 주자 무리하지 않고 ${prevBase}로 귀루합니다.`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
-                        speak(`${targetName} 베이스 송구 도착.`);
+                        speak(`${targetName} 송구 도착.`);
                     } else if (totalDefensiveTime > targetRunnerTime + 1.5) {
-                        speak(`주자 계속 달립니다! 컷오프 없이 ${targetName}로 다이렉트 송구!`);
+                        speak(`주자 계속 달립니다! ${targetName}로 송구!`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
                         speak(`주자 넉넉하게 세이프!`);
