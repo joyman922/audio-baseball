@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.035</div>
+        <div class="version-text">2026-05-08 버전 1.036</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -83,9 +83,10 @@
         const audioBuffers = {}; 
         const pitchBufferCache = {}; 
         
-// 탁한 포구음(glove3) 복구하여 다양성 추가
+// 탁한 포구음(glove3) 복구하여 다양성 추가 및 정타(powerhit) 소리 추가
         const SOUND_URLS = { 
             hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
+            powerhit1: "powerhit1.ogg", powerhit2: "powerhit2.ogg",
             glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
             foul1: "foul1.ogg", bunt: "bunt.ogg",
             swing1: "swing1.ogg", swing2: "swing2.ogg", walk1: "walk1.ogg",
@@ -312,13 +313,13 @@ if (trajectory === 'fly') {
             }
 
 
-// [추가] 모든 포구/송구 캐치 직후 0.3초 뒤에 착지 및 정지하는 발소리(1보)를 재생하여 생동감 부여
+// [추가] 모든 포구/송구 캐치 직후 0.2초 뒤에 착지 및 정지하는 발소리(1보)를 재생하여 생동감 부여
             if (audioBuffers["walk1"]) {
                 const walkSrc = audioCtx.createBufferSource(); walkSrc.buffer = audioBuffers["walk1"];
                 // [수정] 수비수 착지 발소리 볼륨을 0.8에서 0.3으로 대폭 낮춰 부드럽게 들리도록 조절
                 const walkGain = audioCtx.createGain(); walkGain.gain.value = 0.3;
                 walkSrc.connect(panner); panner.connect(walkGain); walkGain.connect(audioCtx.destination);
-                walkSrc.start(audioCtx.currentTime + 0.3);
+                walkSrc.start(audioCtx.currentTime + 0.2);
             }
         }
 
@@ -674,8 +675,8 @@ if (swingType === 'big') {
 
             panner.connect(gain); gain.connect(audioCtx.destination);
 
-            // 이동 시간 동안 0.3초 간격으로 연속 재생
-            let stepCount = Math.floor(duration / 0.3);
+// [수정] Math.floor로 인해 마지막 0.1~0.2초 구간의 발소리가 생략되는 현상을 막기 위해 Math.ceil 적용
+            let stepCount = Math.ceil(duration / 0.3);
             if (stepCount === 0 && duration > 0.1) stepCount = 1; 
             for (let i = 0; i < stepCount; i++) {
                 let stepTime = now + (i * 0.3);
@@ -685,6 +686,11 @@ if (swingType === 'big') {
                 }
             }
         }
+
+
+
+
+
 
         async function executeInPlaySequence(result) {
             const now = audioCtx.currentTime;
@@ -793,13 +799,9 @@ const fielders = {
                 distToBall *= 0.4; 
             }
 
-            // [수정] 실제 프로야구 선수의 전력 질주 속도(초속 8.5m 내외)에 맞춰 외야수와 내야수의 이동 속도를 상향 조정
+// [수정] 실제 프로야구 선수의 전력 질주 속도(초속 8.5m 내외)에 맞춰 외야수와 내야수의 이동 속도를 상향 조정
             let fielderSpeed = isOutfield ? 8.5 : 8.0;
             let fielderRunTime = distToBall / fielderSpeed; 
-
-            // [수정] 뜬공 아웃을 포함한 모든 타구에서 수비수가 공을 향해 뛰는 시간을 계산 (포수 제외)
-
-
 
             if (activeFielderKey === 'c') {
                 fielderRunTime = 0; 
@@ -808,12 +810,21 @@ const fielders = {
             let chaseTime = 0;
             if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
                 chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
+                // [추가] 안타, 펜스 맞는 타구 등은 굴러가거나 튕겨 나오는 공을 쫓아가며 잡아야 하므로
+                // 수비수가 멈춰서 기다리지 않고 포구 직전까지 발소리가 이어지도록 이동 시간을 총 시간과 동기화
+                fielderRunTime = flightTime + chaseTime;
+            } else if (result.type === 'groundout') {
+                // [추가] 땅볼 아웃 역시 공을 향해 대시하여 잡으므로 포구 시점까지 발소리 동기화
+                fielderRunTime = flightTime + chaseTime;
             }
 
-            // [추가] 수비수 이동 시간이 총 체공+추격 시간보다 길 수 없도록 제한
+            // [추가] 뜬공 아웃 등 미리 낙구 지점에 도착하는 경우를 위한 제한 유지
             if (fielderRunTime > flightTime + chaseTime) {
                 fielderRunTime = flightTime + chaseTime;
             }
+
+
+
 
             // [추가] 타격 직후 수비수가 공을 향해 뛰어가는 발소리 공간음향 스케줄링
             if (fielderRunTime > 0.1) {
@@ -1007,12 +1018,18 @@ const fielders = {
                 playBatFoulSound(); speak(result.msg);
                 setTimeout(() => { isPitching = false; }, 1000);
             } 
-            else if (result.inPlay) {
+
+else if (result.inPlay) {
                 handleHitFadeOut(); clearTimeout(pitchTimeout);
                 isPitching = false; isInPlay = true; 
-                playHitSound(false); 
+                // [수정] 타구 속도와 무관하게, 타격 타이밍이 가장 정확한 구간(timeDiff <= 40)에서만 정타 사운드 재생
+                let isPowerHit = (timeDiff <= 40);
+                playHitSound(false, isPowerHit); 
                 executeInPlaySequence(result); 
             }
+
+
+
         }
 
         function moveForward() { 
