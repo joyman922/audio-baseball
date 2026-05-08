@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.034</div>
+        <div class="version-text">2026-05-08 버전 1.035</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -311,12 +311,14 @@ if (trajectory === 'fly') {
                 src.connect(panner); panner.connect(audioCtx.destination); src.start();
             }
 
-            // [추가] 모든 포구/송구 캐치 직후 0.1초 뒤에 착지 및 정지하는 발소리(1보)를 재생하여 생동감 부여
+
+// [추가] 모든 포구/송구 캐치 직후 0.3초 뒤에 착지 및 정지하는 발소리(1보)를 재생하여 생동감 부여
             if (audioBuffers["walk1"]) {
                 const walkSrc = audioCtx.createBufferSource(); walkSrc.buffer = audioBuffers["walk1"];
-                const walkGain = audioCtx.createGain(); walkGain.gain.value = 0.8;
+                // [수정] 수비수 착지 발소리 볼륨을 0.8에서 0.3으로 대폭 낮춰 부드럽게 들리도록 조절
+                const walkGain = audioCtx.createGain(); walkGain.gain.value = 0.3;
                 walkSrc.connect(panner); panner.connect(walkGain); walkGain.connect(audioCtx.destination);
-                walkSrc.start(audioCtx.currentTime + 0.1);
+                walkSrc.start(audioCtx.currentTime + 0.3);
             }
         }
 
@@ -654,7 +656,8 @@ if (swingType === 'big') {
             if (duration <= 0) return;
             const now = audioCtx.currentTime;
             const panner = audioCtx.createPanner();
-            panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
+            // [수정] equalpower 대신 인간의 귀(두상)를 시뮬레이션하는 HRTF 모델을 적용하여 좁은 각도에서도 좌우 방향감이 확실하게 들리도록 개선
+            panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
 
             panner.positionX.setValueAtTime(startX, now);
             panner.positionX.linearRampToValueAtTime(endX, now + duration);
@@ -663,7 +666,11 @@ if (swingType === 'big') {
             panner.positionZ.linearRampToValueAtTime(endZ, now + duration);
 
             const gain = audioCtx.createGain();
-            gain.gain.value = 0.6; // 발소리 볼륨 설정
+            // [수정] 수비수 뛰어가는 발소리를 0.6에서 0.2로 대폭 낮춰 시끄럽지 않게 배경음으로만 처리
+            gain.gain.value = 0.2;
+
+
+
 
             panner.connect(gain); gain.connect(audioCtx.destination);
 
@@ -708,11 +715,16 @@ const coords = {
 
 
 
-            const fielders = {
+const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, '1b': {x: 15, z: -42}, '2b': {x: 0, z: -60},
                 '3b': {x: -35, z: -35}, 'ss': {x: -15, z: -42}, 
+                // [수정] HRTF 모델의 성능을 믿고, 극단적인 패닝 왜곡을 막기 위해 외야수 X좌표를 다시 45로 복구
                 'lf': {x: -45, z: -100}, 'cf': {x: 0, z: -115}, 'rf': {x: 45, z: -100}
             };
+
+
+
+
 
             const bases = {
                 '1b': { x: 27.43, z: -27.43 }, '2b': { x: 0, z: -54.86 },
@@ -776,15 +788,19 @@ const coords = {
 
             let distToBall = Math.sqrt(Math.pow(dest.x - fPos.x, 2) + Math.pow(dest.z - fPos.z, 2));
             
-            // 단타 롤링 시스템: 외야수가 뛸 거리를 공이 굴러와 60% 단축해줌
+// 단타 롤링 시스템: 외야수가 뛸 거리를 공이 굴러와 60% 단축해줌
             if (['single'].includes(result.type) && isOutfield) {
                 distToBall *= 0.4; 
             }
 
-let fielderSpeed = isOutfield ? 6.0 : 7.0;
+            // [수정] 실제 프로야구 선수의 전력 질주 속도(초속 8.5m 내외)에 맞춰 외야수와 내야수의 이동 속도를 상향 조정
+            let fielderSpeed = isOutfield ? 8.5 : 8.0;
             let fielderRunTime = distToBall / fielderSpeed; 
 
             // [수정] 뜬공 아웃을 포함한 모든 타구에서 수비수가 공을 향해 뛰는 시간을 계산 (포수 제외)
+
+
+
             if (activeFielderKey === 'c') {
                 fielderRunTime = 0; 
             }
