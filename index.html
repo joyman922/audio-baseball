@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.033</div>
+        <div class="version-text">2026-05-08 버전 1.034</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -89,7 +89,7 @@
             glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
             foul1: "foul1.ogg", bunt: "bunt.ogg",
             swing1: "swing1.ogg", swing2: "swing2.ogg", walk1: "walk1.ogg",
-            bounce: "bounce.ogg", fence: "fence.ogg"
+            bound: "bound.ogg", fence: "fence.ogg"
         };
 
 
@@ -309,6 +309,14 @@ if (trajectory === 'fly') {
             if (audioBuffers[`glove${r}`]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers[`glove${r}`];
                 src.connect(panner); panner.connect(audioCtx.destination); src.start();
+            }
+
+            // [추가] 모든 포구/송구 캐치 직후 0.1초 뒤에 착지 및 정지하는 발소리(1보)를 재생하여 생동감 부여
+            if (audioBuffers["walk1"]) {
+                const walkSrc = audioCtx.createBufferSource(); walkSrc.buffer = audioBuffers["walk1"];
+                const walkGain = audioCtx.createGain(); walkGain.gain.value = 0.8;
+                walkSrc.connect(panner); panner.connect(walkGain); walkGain.connect(audioCtx.destination);
+                walkSrc.start(audioCtx.currentTime + 0.1);
             }
         }
 
@@ -576,15 +584,23 @@ if (trajectory === 'fly') {
                 return foulDrop('foul_c', vel, "포수 뒤쪽 높이 뜬 공!", "포수 쫓아갔으나 파울.");
             }
 
-            if (swingType === 'big') {
+if (swingType === 'big') {
                 if (timeDiff <= 40) { 
-                    if (r < 25) return hitOF('hr', 'wall_c', getVel(100, 115), "가운데 뻗어가는 타구!", "담장 넘어가는 홈런!", 'fly');
-                    if (r < 40) return hitOF('hr', 'wall_l', getVel(100, 115), "좌측 담장 향해 날아갑니다!", "홈런!", 'fly');
-                    if (r < 55) return hitOF('extra', 'wall_r_deep', getVel(95, 110), "우측 깊숙한 타구!", "", 'wall'); 
-                    if (r < 65) return hitOF('extra', 'lc_deep', getVel(95, 110), "좌중간 완전히 가르는 타구!", "", 'wall');
-                    if (r < 75) return hitOF('extra', 'rc_deep', getVel(95, 110), "우중간 깊숙한 타구!", "", 'wall');
+                    if (r < 15) return hitOF('hr', 'wall_c', getVel(100, 115), "가운데 뻗어가는 타구!", "담장 넘어가는 홈런!", 'fly');
+                    if (r < 25) return hitOF('hr', 'wall_l', getVel(100, 115), "좌측 담장 향해 날아갑니다!", "홈런!", 'fly');
+                    // [추가] 가운데 담장 직격 2루타 및 좌/중/우 외야 워닝트랙 깊은 뜬공 아웃 추가
+                    if (r < 35) return hitOF('extra', 'wall_c', getVel(95, 110), "가운데 담장 직격하는 타구!", "", 'wall'); 
+                    if (r < 45) return hitOF('extra', 'wall_r_deep', getVel(95, 110), "우측 깊숙한 타구!", "", 'wall'); 
+                    if (r < 55) return hitOF('extra', 'lc_deep', getVel(95, 110), "좌중간 완전히 가르는 타구!", "", 'wall');
+                    if (r < 65) return hitOF('extra', 'rc_deep', getVel(95, 110), "우중간 깊숙한 타구!", "", 'wall');
+                    if (r < 75) return outCatch('wall_c', getVel(90, 105), "가운데 깊은 타구!", "중견수 펜스 앞에서 잡아냅니다!", 'fly');
+                    if (r < 85) return outCatch('wall_l', getVel(90, 105), "좌측 담장 앞!", "좌익수 워닝트랙에서 잡습니다!", 'fly');
+                    if (r < 95) return outCatch('wall_r', getVel(90, 105), "우측 뻗어가는 타구!", "우익수 뒤로 물러나며 펜스 앞에서 캐치!", 'fly');
                     return outCatch('cf', getVel(85, 105), "가운데 솟구친 타구!", "중견수가 잡아냅니다.", 'fly');
-                } else if (timeDiff <= 60) { 
+                } else if (timeDiff <= 60) {
+
+
+
                     if (r < 25) return hitOF('single', 'past1b2b', getVel(85, 100), "1,2루간 날카로운 타구!", "", 'line');
                     if (r < 45) return hardHitInfield(getVel(85, 105)); 
                     if (r < 60) return grounder('ss_deep', getVel(70, 90), "3유간 깊은 곳 타구!", "", false);
@@ -633,8 +649,39 @@ if (trajectory === 'fly') {
             }
         }
 
+// [추가] 수비수 발소리 (공간 음향 적용, 0.3초 간격 재생)
+        function playFielderSteps(startX, startZ, endX, endZ, duration) {
+            if (duration <= 0) return;
+            const now = audioCtx.currentTime;
+            const panner = audioCtx.createPanner();
+            panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
+
+            panner.positionX.setValueAtTime(startX, now);
+            panner.positionX.linearRampToValueAtTime(endX, now + duration);
+            panner.positionY.value = 0;
+            panner.positionZ.setValueAtTime(startZ, now);
+            panner.positionZ.linearRampToValueAtTime(endZ, now + duration);
+
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.6; // 발소리 볼륨 설정
+
+            panner.connect(gain); gain.connect(audioCtx.destination);
+
+            // 이동 시간 동안 0.3초 간격으로 연속 재생
+            let stepCount = Math.floor(duration / 0.3);
+            if (stepCount === 0 && duration > 0.1) stepCount = 1; 
+            for (let i = 0; i < stepCount; i++) {
+                let stepTime = now + (i * 0.3);
+                if (audioBuffers["walk1"]) {
+                    const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["walk1"];
+                    src.connect(panner); src.start(stepTime);
+                }
+            }
+        }
+
         async function executeInPlaySequence(result) {
             const now = audioCtx.currentTime;
+
 
 const coords = {
                 'c':  { x: 0, z: 0 }, 'p':  { x: 0, z: -18 },
@@ -734,10 +781,11 @@ const coords = {
                 distToBall *= 0.4; 
             }
 
-            let fielderSpeed = isOutfield ? 6.0 : 7.0;
+let fielderSpeed = isOutfield ? 6.0 : 7.0;
             let fielderRunTime = distToBall / fielderSpeed; 
 
-            if (!['single', 'extra', 'infield_hit', 'groundout', 'foul_drop'].includes(result.type) || result.trajectory === 'fly' || activeFielderKey === 'c') {
+            // [수정] 뜬공 아웃을 포함한 모든 타구에서 수비수가 공을 향해 뛰는 시간을 계산 (포수 제외)
+            if (activeFielderKey === 'c') {
                 fielderRunTime = 0; 
             }
 
@@ -745,6 +793,20 @@ const coords = {
             if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
                 chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
             }
+
+            // [추가] 수비수 이동 시간이 총 체공+추격 시간보다 길 수 없도록 제한
+            if (fielderRunTime > flightTime + chaseTime) {
+                fielderRunTime = flightTime + chaseTime;
+            }
+
+            // [추가] 타격 직후 수비수가 공을 향해 뛰어가는 발소리 공간음향 스케줄링
+            if (fielderRunTime > 0.1) {
+                playFielderSteps(fPos.x, fPos.z, dest.x, dest.z, fielderRunTime);
+            }
+
+
+
+
 
 // [수정] Y축 상승 코드를 제거하고 지면(Y=0)으로 고정하여 어그러짐(Warping) 현상 해결
             audioCtx.listener.positionX.setValueAtTime(0, now);
