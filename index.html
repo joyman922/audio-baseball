@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.027 (단타 롤링 물리엔진, 사운드 고정 및 송구 방향성 강화)</div>
+        <div class="version-text">2026-05-08 버전 1.028 (Z축 실시간 카메라 동기화, 글리산도 사운드 및 중견수 115m 적용)</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -145,8 +145,9 @@
                     if (node.type === 'pitch' || node.type === 'inplay') {
                         node.gain.cancelScheduledValues(now);
                         node.gain.setValueAtTime(node.gain.value, now);
-                        node.gain.linearRampToValueAtTime(0.001, now + 0.05); 
-                        node.src.stop(now + 0.05); 
+                        // 자연스러운 소멸 (글리산도형 페이드아웃)
+                        node.gain.exponentialRampToValueAtTime(0.001, now + 0.3); 
+                        node.src.stop(now + 0.35); 
                     } else if (node.type === 'mitt') {
                         node.src.stop(now); 
                     }
@@ -164,13 +165,14 @@
             let currentListenerZ = isLeftBatter ? -3.5 : 3.5; 
             let avatarX = getAvatarX(); 
             
+            // X는 타석 위치 반영, Y는 무조건 0 고정
             if (instant) {
                 audioCtx.listener.positionX.setValueAtTime(avatarX, audioCtx.currentTime);
-                audioCtx.listener.positionY.setValueAtTime(1.62, audioCtx.currentTime);
+                audioCtx.listener.positionY.setValueAtTime(0, audioCtx.currentTime);
                 audioCtx.listener.positionZ.setValueAtTime(currentListenerZ, audioCtx.currentTime);
             } else {
                 audioCtx.listener.positionX.linearRampToValueAtTime(avatarX, audioCtx.currentTime + 1.0);
-                audioCtx.listener.positionY.linearRampToValueAtTime(1.62, audioCtx.currentTime + 1.0);
+                audioCtx.listener.positionY.setValueAtTime(0, audioCtx.currentTime);
                 audioCtx.listener.positionZ.linearRampToValueAtTime(currentListenerZ, audioCtx.currentTime + 1.0);
             }
         }
@@ -233,7 +235,7 @@
         function playFenceSound(x, z) {
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 150;
-            panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 3.0; 
+            panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 0; 
             if (audioBuffers["fence"]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["fence"];
                 src.connect(panner); panner.connect(audioCtx.destination); src.start();
@@ -243,18 +245,18 @@
             }
         }
 
-        // [수정] 타구음 통일, 볼륨 상향 및 감쇄율(rolloffFactor) 극소화
         function playBallFlightSound(startX, startZ, endX, endZ, flightTime, rollTime, power, trajectory = 'ground', isThrow = false) {
             const now = audioCtx.currentTime;
             const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
             
-            // 타구음은 무조건 100마일급 명확한 바람 소리로 통일
+            // 타구음은 100마일 기준 시원한 소리로 고정 (볼륨 상향)
             let baseFreq = 800; 
-            let peakVol = 0.2; // 거리가 멀어도 절대 죽지 않을 기본 볼륨 확보
+            let peakVol = 0.4; 
 
+            // 송구 소리는 볼륨을 타구음의 약 1/3로 조정하되 선명하게 설정
             if (isThrow) {
-                baseFreq = 1200; // 송구는 더욱 강하고 날카롭게
-                peakVol = 0.8;   // 송구음 압도적으로 증폭
+                baseFreq = 1000; 
+                peakVol = 0.15; 
             }
 
             const filter = audioCtx.createBiquadFilter(); filter.type = "bandpass"; 
@@ -264,45 +266,37 @@
             gain.gain.setValueAtTime(0, now);
             gain.gain.linearRampToValueAtTime(peakVol, now + 0.1);
 
+            let totalMoveTime = flightTime + rollTime;
+
             if (trajectory === 'fly') {
-                filter.frequency.exponentialRampToValueAtTime(Math.max(150, baseFreq * 0.5), now + flightTime); 
-                gain.gain.linearRampToValueAtTime(peakVol * 0.4, now + flightTime); 
-            } else if (trajectory === 'line' || trajectory === 'wall') {
-                gain.gain.setValueAtTime(peakVol, now + flightTime);
+                filter.frequency.exponentialRampToValueAtTime(Math.max(150, baseFreq * 0.5), now + totalMoveTime); 
+                gain.gain.linearRampToValueAtTime(peakVol * 0.5, now + totalMoveTime); 
             } else {
-                gain.gain.linearRampToValueAtTime(peakVol * 0.5, now + flightTime); 
+                gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
             }
 
-            if (rollTime > 0 && !isThrow) {
-                gain.gain.linearRampToValueAtTime(peakVol * 0.25, now + flightTime + 0.05);
-                filter.frequency.linearRampToValueAtTime(120, now + flightTime + 0.05);
-                gain.gain.setValueAtTime(peakVol * 0.25, now + flightTime + rollTime);
-                gain.gain.linearRampToValueAtTime(0.001, now + flightTime + rollTime + 0.2);
-            } else {
-                gain.gain.setValueAtTime(gain.gain.value, now + flightTime);
-                gain.gain.linearRampToValueAtTime(0.001, now + flightTime + 0.2);
-            }
+            // 부드러운 글리산도 페이드아웃 적용
+            gain.gain.setValueAtTime(gain.gain.value, now + totalMoveTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.5); 
 
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; 
             panner.distanceModel = 'linear'; 
             panner.refDistance = 1; 
-            panner.maxDistance = 500; // [수정] 500m로 대폭 증가
-            panner.rolloffFactor = 0.1; // [수정] 거리에 따른 볼륨 감소 최소화 (멀리 가도 명확히 들림)
+            panner.maxDistance = 500; // 절대 죽지 않도록 방대한 거리 부여
+            panner.rolloffFactor = 0.1; // 거리 감쇄율 최소화
 
             panner.positionX.setValueAtTime(startX, now);
-            panner.positionX.linearRampToValueAtTime(endX, now + flightTime);
-            if (rollTime > 0 && !isThrow) panner.positionX.setValueAtTime(endX, now + flightTime + rollTime); 
+            panner.positionX.linearRampToValueAtTime(endX, now + totalMoveTime);
             
-            panner.positionY.value = 0.5; 
+            panner.positionY.value = 0; 
             
             panner.positionZ.setValueAtTime(startZ, now);
-            panner.positionZ.linearRampToValueAtTime(endZ, now + flightTime);
-            if (rollTime > 0 && !isThrow) panner.positionZ.setValueAtTime(endZ, now + flightTime + rollTime); 
+            panner.positionZ.linearRampToValueAtTime(endZ, now + totalMoveTime);
 
             src.connect(filter); filter.connect(gain); gain.connect(panner); panner.connect(audioCtx.destination);
             src.start(now); 
-            src.stop(now + flightTime + rollTime + 0.25); 
+            src.stop(now + totalMoveTime + 0.6); 
             
             activeNodes.push({ type: 'inplay', src: src, gain: gain });
         }
@@ -310,7 +304,7 @@
         function playGloveCatchSound(x, z) {
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 150;
-            panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 1.0;
+            panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 0;
             if (audioBuffers["glove1"]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["glove1"];
                 src.connect(panner); panner.connect(audioCtx.destination); src.start();
@@ -449,8 +443,8 @@
                 flightVolNode.gain.value = aimZ_obj.vol; 
 
                 let currentListenerZ = isLeftBatter ? -3.5 : 3.5;
-                audioCtx.listener.positionX.value = getAvatarX(); 
-                audioCtx.listener.positionY.value = 1.62; 
+                audioCtx.listener.positionX.value = 0; 
+                audioCtx.listener.positionY.value = 0; 
                 audioCtx.listener.positionZ.value = currentListenerZ; 
 
                 let startX = !isLeftBatter ? -18 : 18; 
@@ -462,8 +456,7 @@
 
                 flightPanner.positionX.setValueAtTime(startX, startTime);
                 flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
-                flightPanner.positionY.setValueAtTime(2.0, startTime);
-                flightPanner.positionY.linearRampToValueAtTime(actualY, startTime + flightTime);
+                flightPanner.positionY.setValueAtTime(0, startTime);
                 flightPanner.positionZ.value = actualZ; 
 
                 flightSrc.start(startTime); flightNoiseSrc.start(startTime);
@@ -474,7 +467,7 @@
 
                 const impactPanner = audioCtx.createPanner();
                 impactPanner.panningModel = 'equalpower'; impactPanner.distanceModel = 'linear'; impactPanner.rolloffFactor = 1.5; impactPanner.refDistance = 1; impactPanner.maxDistance = 25; 
-                impactPanner.positionX.value = endX; impactPanner.positionY.value = actualY; impactPanner.positionZ.value = actualZ;
+                impactPanner.positionX.value = endX; impactPanner.positionY.value = 0; impactPanner.positionZ.value = actualZ;
 
                 if (isWildPitch) {
                     const dirtOsc = audioCtx.createOscillator(); const dirtGain = audioCtx.createGain();
@@ -549,7 +542,8 @@
                 
                 if (rand < 0.3) return outCatch(dir, power, vel, `${dirName} 강한 타구!`, `${infielder} 직선타 아웃!`, 0.4);
                 if (rand < 0.6) return grounder(dir, power, vel, `${dirName} 강습 타구!`, `${infielder} 맞고 굴절!`, true, true);
-                return hitOF('single', 'past2b', power, vel, `${dirName} 뚫는 타구!`, ``, 1.2, 'line');
+                // [수정] 1,2루간 등 내야를 가르는 타구는 외야 안타로 라우팅
+                return hitOF('single', dir, power, vel, `${dirName} 빠져나가는 타구!`, ``, 1.2, 'line');
             };
 
             const pitcherAmbiguousHit = (power, vel) => {
@@ -646,11 +640,11 @@
                 'rc_deep': { x: 25, z: -135 }
             };
 
-            // [수정] 외야수 Z좌표 -100 으로 고정
+            // [수정] 중견수 깊은 위치 (115m) 적용
             const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, '1b': {x: 15, z: -42}, '2b': {x: 0, z: -60},
                 '3b': {x: -35, z: -35}, 'ss': {x: -15, z: -42}, 
-                'lf': {x: -45, z: -100}, 'cf': {x: 0, z: -100}, 'rf': {x: 45, z: -100}
+                'lf': {x: -45, z: -100}, 'cf': {x: 0, z: -115}, 'rf': {x: 45, z: -100}
             };
 
             const bases = {
@@ -676,12 +670,15 @@
             if (['3b', 'foul_3b', '3b_deep'].includes(result.dir)) primaryFielder = '3b';
             else if (['p', 'p1b', 'p3b'].includes(result.dir)) primaryFielder = 'p';
             else if (['ss', '23between', 'texas_l', 'ss_deep'].includes(result.dir)) primaryFielder = 'ss';
-            else if (['2b', 'past2b', '2b_deep', '1b2b'].includes(result.dir)) primaryFielder = '2b';
+            else if (['2b', 'past2b', '2b_deep'].includes(result.dir)) primaryFielder = '2b';
             else if (['1b', 'foul_1b'].includes(result.dir)) primaryFielder = '1b';
             else if (['lf', 'wall_l', 'wall_l_deep', 'line_l', 'foul_lf'].includes(result.dir)) primaryFielder = 'lf';
             else if (['rf', 'wall_r', 'wall_r_deep', 'line_r', 'texas_r', 'foul_rf'].includes(result.dir)) primaryFielder = 'rf';
             else if (['c', 'foul_c'].includes(result.dir)) primaryFielder = 'c';
             
+            // 1,2루간 타구 외야로 나갔을 경우 우익수 판정 보장
+            if (result.dir === '1b2b' && isOutfield) primaryFielder = 'rf';
+            if (result.dir === '23between' && isOutfield) primaryFielder = 'lf';
             if (result.dir === 'lc_deep') primaryFielder = (Math.random() < 0.5) ? 'lf' : 'cf';
             if (result.dir === 'rc_deep') primaryFielder = (Math.random() < 0.5) ? 'rf' : 'cf';
 
@@ -709,13 +706,12 @@
             let fPos = fielders[activeFielderKey];
             let distToBall = Math.sqrt(Math.pow(dest.x - fPos.x, 2) + Math.pow(dest.z - fPos.z, 2));
             
-            // [수정] 단타 시 공이 굴러와 만나는 롤링 물리 엔진 반영 (외야수가 뛰어야할 실제 거리를 60% 단축)
+            // [수정] 단타 구르는 물리엔진 적용. 외야수가 뛰어야 할 거리가 타구가 구르는 거리(약 60%)만큼 대폭 줄어듦.
             if (['single'].includes(result.type) && isOutfield) {
-                let rollingDistance = distToBall * 0.6; 
-                distToBall -= rollingDistance; 
+                distToBall *= 0.4; 
             }
 
-            // [수정] 외야수 뛰는 속도를 7.0m/s 로 수정 (주자는 8.0 유지)
+            // [수정] 외야수 달리기 속도 7.0m/s
             let fielderRunTime = distToBall / 7.0; 
 
             if (!['single', 'extra', 'infield_hit', 'groundout', 'foul_drop'].includes(result.type) || result.trajectory === 'fly' || activeFielderKey === 'c') {
@@ -727,18 +723,13 @@
                 chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
             }
 
-            audioCtx.listener.positionX.setTargetAtTime(0, now, 0.2);
-            if (dest.z <= -60 || ['single', 'extra'].includes(result.type)) {
-                audioCtx.listener.positionY.linearRampToValueAtTime(15, now + flightTime); 
-                audioCtx.listener.positionZ.linearRampToValueAtTime(-40, now + flightTime); 
-            } else {
-                audioCtx.listener.positionY.linearRampToValueAtTime(10, now + flightTime);
-                audioCtx.listener.positionZ.linearRampToValueAtTime(15, now + flightTime);
-            }
+            // [수정] 카메라(Z축)를 공의 도착 지점까지 실시간으로 똑같이 추적하여 공간감을 유지 (Y=0, X=0 고정)
+            audioCtx.listener.positionX.setValueAtTime(0, now);
+            audioCtx.listener.positionY.setValueAtTime(0, now);
+            audioCtx.listener.positionZ.linearRampToValueAtTime(dest.z, now + flightTime + chaseTime); 
 
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.power, result.trajectory, false);
             
-            // [수정] 타구 속도 TTS 누락 복구
             speak(`타구 속도 ${result.vel}마일! ${result.msgInit}`);
 
             let timeToCatch = flightTime + chaseTime;
@@ -749,25 +740,25 @@
             };
             let caughtByName = getFielderName(activeFielderKey);
 
+            // [수정] 타구 상황, 충돌음, 잡는 멘트를 시간대별로 완벽히 쪼개서 송출
             if (result.trajectory === 'wall') {
                 await sleep(flightTime * 1000); 
                 playFenceSound(dest.x, dest.z);
-                speak("펜스 때립니다!");
+                speak("펜스 직접 때립니다!");
                 if (chaseTime > 0) await sleep(chaseTime * 1000);
-                playGloveCatchSound(dest.x, dest.z);
-                speak(`${caughtByName} 잡자마자 송구!`);
-            } else if (result.isDeflected) {
-                await sleep(flightTime * 1000); 
-                speak(`${result.msgDeflect} ${caughtByName} 백업 들어옵니다!`);
-                await sleep(chaseTime * 1000); 
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
+            } else if (result.isDeflected) {
+                await sleep(flightTime * 1000); 
+                speak(`${result.msgDeflect} ${caughtByName} 백업 들어옵니다.`);
+                await sleep(chaseTime * 1000); 
+                playGloveCatchSound(dest.x, dest.z);
+                speak(`${caughtByName} 공 잡았습니다.`);
             } else if (['single', 'extra'].includes(result.type)) {
                 await sleep(flightTime * 1000);
-                playBounceSound(dest.x, dest.z);
                 if (chaseTime > 0) await sleep(chaseTime * 1000);
                 playGloveCatchSound(dest.x, dest.z);
-                speak(`${caughtByName} 잡자마자 송구!`);
+                speak(`${caughtByName} 공 잡았습니다.`);
             } else if (result.type === 'groundout' || result.type === 'infield_hit') {
                 await sleep(timeToCatch * 1000);
                 playGloveCatchSound(dest.x, dest.z);
@@ -793,22 +784,24 @@
                 if (throwTime < 0.2) throwTime = 0.2;
 
                 let throwPower = (dest.z < -60) ? 3 : 2;
+                // [수정] 수비수가 던지는 소리는 무조건 '공을 잡은 최종 위치(dest)'에서 '송구 목적지(targetCoord)'로 향함
                 playBallFlightSound(dest.x, dest.z, targetCoord.x, targetCoord.z, throwTime, 0, throwPower, 'line', true); 
                 
+                // [수정] 송구와 함께 카메라(Z축)도 수비수 위치에서 베이스 위치로 자연스럽게 이동
                 let throwStart = audioCtx.currentTime;
-                audioCtx.listener.positionX.setTargetAtTime(0, throwStart, 0.2);
-                audioCtx.listener.positionY.linearRampToValueAtTime(10, throwStart + throwTime);
-                audioCtx.listener.positionZ.linearRampToValueAtTime(15, throwStart + throwTime);
+                audioCtx.listener.positionZ.linearRampToValueAtTime(targetCoord.z, throwStart + throwTime);
 
                 let totalDefensiveTime = timeToCatch + fieldingTime + throwTime;
-                let runnerTime1B = 42.42 / 8.0; // 주자는 초속 8m 고정 (1루까지 약 5.3초)
+                let runnerTime1B = 42.42 / 8.0; 
                 let runnerTime2B = runnerTime1B * 2; 
                 let runnerTime3B = runnerTime1B * 3; 
 
+                // [수정] 송구와 주자 판단 로직 분리 및 귀루/진루 결과 명확화
                 if (result.type === 'single') {
                     speak(`2루로 송구!`);
                     await sleep(throwTime * 1000);
                     playGloveCatchSound(targetCoord.x, targetCoord.z); 
+                    speak(`주자 1루에 멈춥니다.`);
                     await sleep(800); 
                 } else if (result.type === 'extra') {
                     let targetRunnerTime = (targetBase === '2b') ? runnerTime2B : runnerTime3B;
@@ -816,14 +809,14 @@
                     let targetName = targetBase === '2b' ? '2루' : '3루';
                     
                     if (totalDefensiveTime < targetRunnerTime - 1.0) {
-                        speak(`송구가 빠릅니다! 주자 무리하지 않고 ${prevBase}로 귀루합니다. ${targetName}로 송구!`);
+                        speak(`${targetName}로 송구! 주자 무리하지 않고 ${prevBase}로 귀루합니다.`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
                     } else if (totalDefensiveTime > targetRunnerTime + 1.5) {
                         speak(`${targetName}로 송구!`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
-                        speak(`여유 있게 세이프!`);
+                        speak(`주자 여유 있게 세이프!`);
                     } else {
                         speak(`${targetName}로 송구!`);
                         await sleep(throwTime * 1000); 
@@ -832,15 +825,14 @@
                         if (isSafe) {
                             speak(`세이프! 베이스에 먼저 들어갔습니다!`);
                         } else {
-                            speak(`아웃! 태그 아웃! 보살입니다!`);
+                            speak(`아웃! 정확한 보살입니다!`);
                         }
                     }
                     await sleep(800);
                 } else {
                     let coverText = "";
                     if (targetBase === '1b') {
-                        if (activeFielderKey === '1b') coverText = " 투수 1루 커버!";
-                        else if (activeFielderKey === 'p' || result.dir === '1b2b' || result.dir === 'p1b') coverText = " 1루수 베이스 커버!";
+                        if (activeFielderKey === '1b') coverText = " 투수 커버 들어옵니다.";
                     }
                     speak(`1루로 송구!${coverText}`);
 
@@ -851,7 +843,7 @@
                     if (isSafe) {
                         speak(`세이프! 내야 안타!`);
                     } else {
-                        speak(`아웃! 1루 아웃!`);
+                        speak(`아웃! 1루에서 아웃입니다!`);
                     }
                     await sleep(800); 
                 }
