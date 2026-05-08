@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.032 (외야수 구역 요격 할당, 주루 AI 분리, Y축 고도비례 추적 시스템)</div>
+        <div class="version-text">2026-05-08 버전 1.033</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -83,14 +83,15 @@
         const audioBuffers = {}; 
         const pitchBufferCache = {}; 
         
-        // 탁한 포구음(glove3) 제거, 맑은 소리(glove1, glove2)만 사용
+// 탁한 포구음(glove3) 복구하여 다양성 추가
         const SOUND_URLS = { 
             hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
-            glove1: "glove1.ogg", glove2: "glove2.ogg",
+            glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
             foul1: "foul1.ogg", bunt: "bunt.ogg",
             swing1: "swing1.ogg", swing2: "swing2.ogg", walk1: "walk1.ogg",
             bounce: "bounce.ogg", fence: "fence.ogg"
-        }; 
+        };
+
 
         async function loadSound(name, url) {
             try {
@@ -256,18 +257,19 @@
 
             let totalMoveTime = flightTime + rollTime;
 
-            if (trajectory === 'fly') {
+if (trajectory === 'fly') {
                 filter.frequency.exponentialRampToValueAtTime(Math.max(150, baseFreq * 0.5), now + totalMoveTime); 
                 gain.gain.linearRampToValueAtTime(peakVol * 0.5, now + totalMoveTime); 
+                // [수정] 페이드아웃 시작 볼륨을 fly 타구에 맞게 명시적 고정 (팝핑 노이즈 완벽 방지)
+                gain.gain.setValueAtTime(peakVol * 0.5, now + totalMoveTime);
             } else {
+                gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
+                // [수정] 페이드아웃 시작 볼륨을 지상 타구에 맞게 명시적 고정 (팝핑 노이즈 완벽 방지)
                 gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
             }
 
-// 송구음/타구음 끝날 때 뚝 끊기지 않고 0.4초 글리산도 페이드아웃 (자연스러운 여운)
-            gain.gain.setValueAtTime(gain.gain.value, now + totalMoveTime);
+            // 송구음/타구음 끝날 때 뚝 끊기지 않고 0.4초 글리산도 페이드아웃 (자연스러운 여운)
             gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.4);
-
-
 
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; 
@@ -287,24 +289,33 @@
             src.connect(filter); filter.connect(gain); gain.connect(panner); panner.connect(audioCtx.destination);
             src.start(now); 
             
-            // 0.15초 글리산도 오버랩 유지 후 완전히 종료
-            src.stop(now + totalMoveTime + 0.2); 
+            // [수정] 페이드아웃이 완전히 끝날 수 있도록 0.5초 대기 후 종료 (오버랩 잘림 방지)
+            src.stop(now + totalMoveTime + 0.5); 
             
             activeNodes.push({ type: 'inplay', src: src, gain: gain });
         }
 
-        // [수정] 맑은 글러브 1, 2번만 고정 사용
+
+
+
+
+// [수정] 포구음 다양성을 위해 glove 1~3번 모두 랜덤 사용 및 자연스러운 공간감 적용
         function playGloveCatchSound(x, z) {
             const panner = audioCtx.createPanner();
-            panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 150;
+            panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
             panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 0;
             
-            let r = Math.floor(Math.random() * 2) + 1; 
+            let r = Math.floor(Math.random() * 3) + 1; 
             if (audioBuffers[`glove${r}`]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers[`glove${r}`];
                 src.connect(panner); panner.connect(audioCtx.destination); src.start();
             }
         }
+
+
+
+
+
 
         async function throwBall() {
             if (!document.getElementById("gameScreen").classList.contains("active")) return;
@@ -472,12 +483,17 @@
                     dirtOsc.connect(impactPanner); impactPanner.connect(dirtGain); dirtGain.connect(audioCtx.destination);
                     dirtOsc.start(startTime + flightTime); dirtOsc.stop(startTime + flightTime + 0.2);
                     activeNodes.push({ type: 'mitt', src: dirtOsc });
-                } else {
-                    // [수정] 포수 맑은 글러브 소리 적용 및 pitch 소리와 0.1초 겹침 (start 시간 flightTime 정각)
-                    let r = Math.floor(Math.random() * 2) + 1;
+
+
+} else {
+                    // [수정] 포수 글러브 소리 1~3 랜덤 적용 및 pitch 소리와 자연스러운 겹침
+                    let r = Math.floor(Math.random() * 3) + 1;
                     if (audioBuffers[`glove${r}`]) {
                         const mittSrc = audioCtx.createBufferSource(); mittSrc.buffer = audioBuffers[`glove${r}`];
-                        const mittGain = audioCtx.createGain(); mittGain.gain.value = 1.5; 
+                        const mittGain = audioCtx.createGain(); mittGain.gain.value = 1.5;
+
+
+
                         mittSrc.connect(impactPanner); impactPanner.connect(mittGain); mittGain.connect(audioCtx.destination);
                         mittSrc.start(startTime + flightTime); activeNodes.push({ type: 'mitt', src: mittSrc });
                     } else {
@@ -732,11 +748,11 @@ const coords = {
 
 // [수정] Y축 상승 코드를 제거하고 지면(Y=0)으로 고정하여 어그러짐(Warping) 현상 해결
             audioCtx.listener.positionX.setValueAtTime(0, now);
-            
             audioCtx.listener.positionY.setValueAtTime(0, now);
+            // [추가] Web Audio API의 순간이동(Snap) 버그 방지를 위해 현재 Z위치 고정(Anchor)
+            audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
             // 리스너가 공의 약간 뒤(15m)를 추적하여 좌우 반전(Front/Back Flipping) 완벽 예방
             audioCtx.listener.positionZ.linearRampToValueAtTime(Math.min(15, dest.z + 15), now + flightTime + chaseTime);
-
 
 
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
@@ -793,13 +809,19 @@ const coords = {
                 let throwTime = distanceThrow / (throwSpeedMph * 0.44704);
                 if (throwTime < 0.2) throwTime = 0.2;
 
-                // [수정] 수비수가 잡은 위치에서 송구
+// [수정] 수비수가 잡은 위치에서 송구
                 playBallFlightSound(dest.x, dest.z, targetCoord.x, targetCoord.z, throwTime, 0, throwSpeedMph, 'line', true); 
                 
-                // [수정] 카메라(Z축, Y축)가 송구를 따라 내야로 자연스럽게 미끄러져 복귀
+                // [수정] 카메라(Z축, Y축)가 송구를 따라 내야로 자연스럽게 미끄러져 복귀 (순간이동 버그 및 속도감 오류 완벽 해결)
                 let throwStart = audioCtx.currentTime;
+                audioCtx.listener.positionY.setValueAtTime(0, throwStart);
+                audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, throwStart);
                 audioCtx.listener.positionY.linearRampToValueAtTime(0, throwStart + throwTime);
-                audioCtx.listener.positionZ.linearRampToValueAtTime(15, throwStart + throwTime);
+                // 타겟 베이스의 15m 뒤까지만 복귀하도록 수정 (15는 홈플레이트이므로, 기존에는 엄청난 속도로 카메라가 역주행했음)
+                audioCtx.listener.positionZ.linearRampToValueAtTime(targetCoord.z + 15, throwStart + throwTime);
+
+
+
 
                 let totalDefensiveTime = timeToCatch + fieldingTime + throwTime;
                 
