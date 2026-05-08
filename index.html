@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.022 (실시간 동기화, 연속 오디오 및 3인칭 뷰 고도화 패치)</div>
+        <div class="version-text">2026-05-08 버전 1.023 (수비 물리엔진 무제한화, 외야 산포도 확대 및 송구 볼륨 강화)</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -87,7 +87,8 @@
             hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
             glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
             foul1: "foul1.ogg", bunt: "bunt.ogg",
-            swing1: "swing1.ogg", swing2: "swing2.ogg", walk1: "walk1.ogg"
+            swing1: "swing1.ogg", swing2: "swing2.ogg", walk1: "walk1.ogg",
+            bounce: "bounce.ogg", fence: "fence.ogg"
         }; 
 
         async function loadSound(name, url) {
@@ -209,12 +210,17 @@
             }
         }
 
-        function playBallFlightSound(startX, startZ, endX, endZ, totalDuration, power) {
+        // [수정] 수비수 송구 시 볼륨 대폭 확대를 위한 isThrow 파라미터 적용
+        function playBallFlightSound(startX, startZ, endX, endZ, flightTime, rollTime, power, trajectory = 'ground', isThrow = false) {
             const now = audioCtx.currentTime;
             const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
             
-            const baseFreq = 200 + (power * 250); 
-            const peakVol = 0.02 + (power * 0.025); 
+            // 송구 시 주파수와 볼륨 피크를 강하게 올려 명확히 들리게 조정
+            let baseFreq = 200 + (power * 250); 
+            if (isThrow) baseFreq += 150; 
+            
+            let peakVol = 0.02 + (power * 0.025); 
+            if (isThrow) peakVol = 0.08 + (power * 0.03); 
 
             const filter = audioCtx.createBiquadFilter(); filter.type = "bandpass"; 
             const gain = audioCtx.createGain();
@@ -222,23 +228,43 @@
             filter.frequency.setValueAtTime(baseFreq, now);
             gain.gain.setValueAtTime(0, now);
             gain.gain.linearRampToValueAtTime(peakVol, now + 0.1);
-            
-            gain.gain.setValueAtTime(peakVol, now + totalDuration);
-            gain.gain.linearRampToValueAtTime(0.001, now + totalDuration + 0.1);
+
+            if (trajectory === 'fly') {
+                filter.frequency.exponentialRampToValueAtTime(Math.max(150, baseFreq * 0.5), now + flightTime); 
+                gain.gain.linearRampToValueAtTime(peakVol * 0.4, now + flightTime); 
+            } else if (trajectory === 'line' || trajectory === 'wall') {
+                gain.gain.setValueAtTime(peakVol, now + flightTime);
+            } else {
+                gain.gain.linearRampToValueAtTime(peakVol * 0.5, now + flightTime); 
+            }
+
+            if (rollTime > 0 && !isThrow) {
+                gain.gain.linearRampToValueAtTime(peakVol * 0.15, now + flightTime + 0.05);
+                filter.frequency.linearRampToValueAtTime(120, now + flightTime + 0.05);
+                gain.gain.setValueAtTime(peakVol * 0.15, now + flightTime + rollTime);
+                gain.gain.linearRampToValueAtTime(0.001, now + flightTime + rollTime + 0.2);
+            } else {
+                gain.gain.setValueAtTime(gain.gain.value, now + flightTime);
+                gain.gain.linearRampToValueAtTime(0.001, now + flightTime + 0.2);
+            }
 
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; 
             panner.refDistance = 1; panner.maxDistance = 150; 
 
             panner.positionX.setValueAtTime(startX, now);
-            panner.positionX.linearRampToValueAtTime(endX, now + totalDuration);
+            panner.positionX.linearRampToValueAtTime(endX, now + flightTime);
+            if (rollTime > 0 && !isThrow) panner.positionX.setValueAtTime(endX, now + flightTime + rollTime); 
+            
             panner.positionY.value = 0.5; 
+            
             panner.positionZ.setValueAtTime(startZ, now);
-            panner.positionZ.linearRampToValueAtTime(endZ, now + totalDuration);
+            panner.positionZ.linearRampToValueAtTime(endZ, now + flightTime);
+            if (rollTime > 0 && !isThrow) panner.positionZ.setValueAtTime(endZ, now + flightTime + rollTime); 
 
             src.connect(filter); filter.connect(gain); gain.connect(panner); panner.connect(audioCtx.destination);
             src.start(now); 
-            src.stop(now + totalDuration + 0.2); 
+            src.stop(now + flightTime + rollTime + 0.25); 
             
             activeNodes.push({ type: 'inplay', src: src, gain: gain });
         }
@@ -456,6 +482,7 @@
             }, 1000);
         }
 
+        // [수정] 타구 속도 범위 대폭 상향, 좌우중간(lc_deep, rc_deep) 추가 등 난수 완전 개편
         function calculateHitResult(swingType, timeDiff) {
             let r = Math.random() * 100;
             const getVel = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -465,11 +492,11 @@
             });
             const grounder = (dir, power, vel, msgInit, msgDeflect, isHit = false, isDeflected = false) => ({
                 inPlay: true, type: isHit ? 'infield_hit' : 'groundout', dir, power, vel,
-                runnerTime: 4.1 + (Math.random()*0.3), msgInit, msgDeflect, isDeflected
+                runnerTime: 4.1 + (Math.random()*0.4), msgInit, msgDeflect, isDeflected
             });
-            const hitOF = (type, dir, power, vel, msgInit, msgCatch, fTime = 1.0) => ({
+            const hitOF = (type, dir, power, vel, msgInit, msgCatch, fTime = 1.0, trajectory = 'line') => ({
                 inPlay: true, type, dir, power, vel, runnerTime: 99, 
-                msgInit, msgCatch, flightTimeOverride: fTime
+                msgInit, msgCatch, flightTimeOverride: fTime, trajectory
             });
             const foulFly = (dir, power, vel, msgInit, msgCatch) => ({
                 inPlay: true, type: 'foul_flyout', dir, power, vel, msgInit, msgCatch, flightTimeOverride: 2.5
@@ -485,7 +512,7 @@
                 
                 if (rand < 0.3) return outCatch(dir, power, vel, `${dirName} 쪽 총알 같은 타구!`, `${infielder} 반사적으로 글러브 뻗어 잡습니다! 라인드라이브 아웃!`, 0.4);
                 if (rand < 0.6) return grounder(dir, power, vel, `${dirName} 쪽 강습 타구!`, `${infielder} 맞고 굴절! 외야로 빠집니다!`, true, true);
-                return hitOF('single', 'past2b', power, vel, `${dirName} 완전히 뚫는 타구!`, `중견수 앞으로 굴러갑니다!`, 1.2);
+                return hitOF('single', 'past2b', power, vel, `${dirName} 완전히 뚫는 타구!`, `중견수 앞으로 굴러갑니다!`, 1.2, 'line');
             };
 
             const pitcherAmbiguousHit = (power, vel) => {
@@ -504,54 +531,54 @@
 
             if (swingType === 'big') {
                 if (timeDiff <= 40) { 
-                    if (r < 25) return hitOF('hr', 'wall_c', 5, getVel(100, 115), "가운데 깊게 뻗어가는 타구!", "담장 넘어가는 대형 홈런!", 3.5);
-                    if (r < 40) return hitOF('hr', 'wall_l', 5, getVel(100, 110), "좌측 담장 향해 크게 날아갑니다!", "그대로 넘어가는 홈런!", 3.5);
-                    if (r < 55) return hitOF('extra', 'wall_r_deep', 5, getVel(95, 110), "우측 깊숙한 타구!", "우익수 키를 넘겨 펜스를 직접 때립니다!", 2.5); 
-                    if (r < 70) return hitOF('extra', 'cf', 4, getVel(90, 105), "중견수 쪽 뻗어갑니다!", "중견수 키를 넘기며 워닝 트랙까지 굴러갑니다!", 2.0);
-                    if (r < 80) return hitOF('single', 'line_l', 4, getVel(90, 105), "3루 선상 강하게 구르는 타구!", "선상 타고 흐르는 좌전 안타!", 1.5);
-                    return outCatch('cf', 4, getVel(85, 100), "가운데 높게 솟구친 타구!", "워닝 트랙 앞에서 중견수가 잡아냅니다.", 3.0);
+                    if (r < 25) return hitOF('hr', 'wall_c', 5, getVel(100, 115), "가운데 뻗어가는 타구!", "담장 넘어가는 대형 홈런!", 3.5, 'fly');
+                    if (r < 40) return hitOF('hr', 'wall_l', 5, getVel(100, 115), "좌측 담장 향해 크게 날아갑니다!", "그대로 넘어가는 홈런!", 3.5, 'fly');
+                    if (r < 55) return hitOF('extra', 'wall_r_deep', 5, getVel(95, 110), "우측 깊숙한 타구!", "우익수 키를 넘겨 펜스를 때립니다!", 2.5, 'wall'); 
+                    if (r < 65) return hitOF('extra', 'lc_deep', 4, getVel(95, 110), "좌중간을 완전히 가릅니다!", "펜스까지 굴러갑니다!", 2.2, 'wall');
+                    if (r < 75) return hitOF('extra', 'rc_deep', 4, getVel(95, 110), "우중간 깊숙한 타구!", "우중간 가릅니다!", 2.2, 'wall');
+                    return outCatch('cf', 4, getVel(85, 105), "가운데 솟구친 타구!", "워닝 트랙 앞에서 중견수가 잡아냅니다.", 3.0);
                 } else if (timeDiff <= 60) { 
-                    if (r < 25) return hitOF('single', '1b2b', 4, getVel(85, 95), "1,2루간 날카로운 타구!", "1루수 옆을 빠져나가는 우전 안타!", 1.2);
-                    if (r < 45) return hardHitInfield('3b', 4, getVel(85, 100)); 
-                    if (r < 60) return grounder('ss_deep', 2, getVel(60, 75), "3유간 깊은 곳 굴러가는 타구!", "", false);
-                    if (r < 80) return foulFly('foul_lf', 2, getVel(65, 80), "좌측 파울 라인 밖으로 뜬 공!", "좌익수 전력 질주! 파울 지역에서 걷어냅니다!");
+                    if (r < 25) return hitOF('single', '1b2b', 4, getVel(85, 100), "1,2루간 날카로운 타구!", "1루수 옆을 빠져나가는 우전 안타!", 1.2, 'line');
+                    if (r < 45) return hardHitInfield('3b', 4, getVel(85, 105)); 
+                    if (r < 60) return grounder('ss_deep', 2, getVel(70, 90), "3유간 깊은 곳 굴러가는 타구!", "", false);
+                    if (r < 80) return foulFly('foul_lf', 2, getVel(75, 95), "좌측 파울 라인 밖으로 뜬 공!", "좌익수 전력 질주! 파울 지역에서 걷어냅니다!");
                     return { inPlay: false, type: 'foul', msg: "파울." }; 
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             } 
             else if (swingType === 'short') {
                 if (timeDiff <= 40) { 
-                    if (r < 30) return hitOF('single', 'texas_l', 3, getVel(80, 90), "좌측 애매한 위치로 뜹니다!", "좌익수 앞에 툭 떨어지는 바가지 안타!", 1.8);
-                    if (r < 50) return hitOF('single', 'texas_r', 3, getVel(80, 90), "우측 얕은 곳으로 향합니다!", "2루수 뒤 우익수 앞에 떨어지는 안타!", 1.8);
-                    if (r < 75) return hitOF('extra', 'line_r', 3, getVel(85, 95), "1루 선상 뻗어가는 타구!", "우익수 선상 구석으로 쫓아갑니다!", 2.0);
-                    if (r < 90) return outCatch('lf', 3, getVel(80, 90), "좌익수 앞 짧은 타구!", "좌익수 전력 질주하며 다이빙 캐치!", 1.5);
-                    return grounder('2b', 2, getVel(70, 85), "2루수 정면 땅볼!", "", false);
+                    if (r < 30) return hitOF('single', 'texas_l', 3, getVel(80, 95), "좌측 애매한 위치로 뜹니다!", "좌익수 앞에 툭 떨어지는 바가지 안타!", 1.8, 'fly');
+                    if (r < 50) return hitOF('single', 'texas_r', 3, getVel(80, 95), "우측 얕은 곳으로 향합니다!", "2루수 뒤 우익수 앞에 떨어지는 안타!", 1.8, 'fly');
+                    if (r < 75) return hitOF('extra', 'line_r', 3, getVel(85, 100), "1루 선상 뻗어가는 타구!", "우익수 선상 구석으로 쫓아갑니다!", 2.0, 'line');
+                    if (r < 90) return outCatch('lf', 3, getVel(80, 100), "좌익수 앞 짧은 타구!", "좌익수 전력 질주하며 다이빙 캐치!", 1.5);
+                    return grounder('2b', 2, getVel(75, 95), "2루수 정면 땅볼!", "", false);
                 } else if (timeDiff <= 65) { 
-                    if (r < 25) return hardHitInfield('23between', 2, getVel(65, 75));
-                    if (r < 50) return pitcherAmbiguousHit(1, getVel(50, 65)); 
-                    if (r < 70) return catcherPopFoul(2, getVel(60, 75));
-                    return grounder('1b', 1, getVel(50, 65), "1루수 앞 빗맞은 땅볼!", "", false);
+                    if (r < 25) return hardHitInfield('23between', 2, getVel(70, 90));
+                    if (r < 50) return pitcherAmbiguousHit(1, getVel(60, 85)); 
+                    if (r < 70) return catcherPopFoul(2, getVel(65, 85));
+                    return grounder('1b', 1, getVel(60, 85), "1루수 앞 빗맞은 땅볼!", "", false);
                 } else if (timeDiff <= 90) { 
                     if (r < 65) return { inPlay: false, type: 'foul', msg: "커트! 파울." }; 
-                    return grounder('1b2b', 1, getVel(40, 60), "1,2루간 힘없는 땅볼!", "", false);
+                    return grounder('1b2b', 1, getVel(50, 75), "1,2루간 힘없는 땅볼!", "", false);
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             }
             else { 
                 if (timeDiff <= 40) { 
-                    if (r < 35) return hitOF('single', '1b2b', 4, getVel(85, 95), "1,2루간 강한 타구!", "1루수 옆을 뚫고 지나가는 안타!", 1.2);
-                    if (r < 55) return hitOF('extra', 'wall_l_deep', 4, getVel(90, 100), "좌측 깊숙한 타구!", "좌익수 키를 넘겨 펜스를 직접 직격합니다!", 2.2);
-                    if (r < 75) return hardHitInfield('23between', 4, getVel(90, 100)); 
-                    return grounder('3b', 3, getVel(80, 95), "3루수 정면 강하게 굴러갑니다!", "", false);
+                    if (r < 35) return hitOF('single', '1b2b', 4, getVel(85, 105), "1,2루간 강한 타구!", "1루수 옆을 뚫고 지나가는 안타!", 1.2, 'line');
+                    if (r < 55) return hitOF('extra', 'wall_l_deep', 4, getVel(90, 110), "좌측 깊숙한 타구!", "좌익수 키를 넘겨 펜스를 직접 직격합니다!", 2.2, 'wall');
+                    if (r < 75) return hardHitInfield('23between', 4, getVel(90, 105)); 
+                    return grounder('3b', 3, getVel(85, 100), "3루수 정면 강하게 굴러갑니다!", "", false);
                 } else if (timeDiff <= 55) { 
-                    if (r < 40) return hitOF('single', 'past2b', 3, getVel(75, 85), "2루 베이스 스치는 타구!", "센터 쪽으로 빠져나가는 중전 안타!", 1.3);
-                    if (r < 60) return outCatch('2b', 2, getVel(65, 75), "2루수 키 넘을 듯한 타구!", "2루수 껑충 뛰며 점프 캐치! 아웃!", 0.8); 
-                    return grounder('ss', 2, getVel(65, 80), "유격수 땅볼!", "", false);
+                    if (r < 40) return hitOF('single', 'past2b', 3, getVel(80, 95), "2루 베이스 스치는 타구!", "센터 쪽으로 빠져나가는 중전 안타!", 1.3, 'line');
+                    if (r < 60) return outCatch('2b', 2, getVel(75, 90), "2루수 키 넘을 듯한 타구!", "2루수 껑충 뛰며 점프 캐치! 아웃!", 0.8); 
+                    return grounder('ss', 2, getVel(70, 90), "유격수 땅볼!", "", false);
                 } else if (timeDiff <= 70) { 
-                    if (r < 30) return outCatch('p', 2, getVel(50, 65), "내야 높게 뜹니다!", "투수가 제자리에서 잡아냅니다. 뜬공 아웃.", 3.0);
-                    if (r < 55) return pitcherAmbiguousHit(1, getVel(50, 65));
-                    if (r < 80) return outCatch('cf', 2, getVel(60, 75), "가운데 뜹니다!", "중견수 여유있게 잡아냅니다.", 2.5);
-                    return foulDrop('foul_1b', 1, getVel(50, 65), "1루측 그물망 쪽 타구!", "1루수 전력으로 쫓아갔지만 관중석 쪽으로 떨어집니다. 파울.");
+                    if (r < 30) return outCatch('p', 2, getVel(60, 80), "내야 높게 뜹니다!", "투수가 제자리에서 잡아냅니다. 뜬공 아웃.", 3.0);
+                    if (r < 55) return pitcherAmbiguousHit(1, getVel(60, 80));
+                    if (r < 80) return outCatch('cf', 2, getVel(70, 95), "가운데 뜹니다!", "중견수 여유있게 잡아냅니다.", 2.5);
+                    return foulDrop('foul_1b', 1, getVel(60, 80), "1루측 그물망 쪽 타구!", "1루수 전력으로 쫓아갔지만 관중석 쪽으로 떨어집니다. 파울.");
                 } else if (timeDiff <= 80) { 
                     return { inPlay: false, type: 'foul', msg: "커트! 파울." }; 
                 }
@@ -562,6 +589,7 @@
         async function executeInPlaySequence(result) {
             const now = audioCtx.currentTime;
 
+            // [수정] 좌중간, 우중간 가르는 타구 좌표 및 외야수 깊은 기본 위치 반영
             const coords = {
                 'c':  { x: 0, z: 0 }, 'p':  { x: 0, z: -18 },
                 '3b': { x: -30, z: -30 }, 'ss': { x: -15, z: -40 },     
@@ -572,19 +600,20 @@
                 'texas_l': { x: -25, z: -70 }, 'texas_r': { x: 25, z: -70 },  
                 'line_l': { x: -45, z: -80 }, 'line_r': { x: 45, z: -80 },  
                 'wall_l': { x: -50, z: -125 }, 'wall_c': { x: 0, z: -145 },   
-                'wall_r': { x: 50, z: -125 }, 'wall_l_deep': { x: -60, z: -140 }, 
-                'wall_r_deep': { x: 60, z: -140 }, 'foul_c': { x: 0, z: 15 },
+                'wall_r': { x: 50, z: -125 }, 'wall_l_deep': { x: -45, z: -140 }, 
+                'wall_r_deep': { x: 45, z: -140 }, 'foul_c': { x: 0, z: 15 },
                 'foul_1b': { x: 40, z: -15 }, 'foul_3b': { x: -40, z: -15 },
                 'foul_lf': { x: -80, z: -80 }, 'foul_rf': { x: 80, z: -80 },
                 'p3b': { x: -10, z: -20 }, 'ss_deep': { x: -18, z: -55 }, 
                 '3b_deep': { x: -35, z: -40 }, '2b_deep': { x: 18, z: -55 }, 
-                'p1b': { x: 10, z: -20 }
+                'p1b': { x: 10, z: -20 }, 'lc_deep': { x: -25, z: -140 },
+                'rc_deep': { x: 25, z: -140 }
             };
 
             const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, '1b': {x: 22, z: -30}, '2b': {x: 15, z: -40},
-                '3b': {x: -22, z: -30}, 'ss': {x: -15, z: -40}, 'lf': {x: -45, z: -90},
-                'cf': {x: 0, z: -110}, 'rf': {x: 45, z: -90}
+                '3b': {x: -22, z: -30}, 'ss': {x: -15, z: -40}, 
+                'lf': {x: -45, z: -100}, 'cf': {x: 0, z: -115}, 'rf': {x: 45, z: -100}
             };
 
             const bases = {
@@ -592,11 +621,12 @@
                 '3b': { x: -27, z: -27 }, 'c': { x: 0, z: 0 }
             };
 
-            // 내야수 정면으로 가거나, 깊은 곳으로 가는 난수 최적화 (수비 런타임의 다양성 보장)
-            let scatterX = (Math.random() * 8) - 4; 
-            let scatterZ = (Math.random() * 8) - 4;
-
+            // [수정] 외야에 떨어질 경우 산포도를 X축 24m, Z축 20m 폭으로 매우 넓게 확장
             let baseDest = coords[result.dir] || coords['cf'];
+            let isOutfield = baseDest.z < -60;
+            let scatterX = isOutfield ? (Math.random() * 24 - 12) : (Math.random() * 6 - 3); 
+            let scatterZ = isOutfield ? (Math.random() * 20 - 10) : (Math.random() * 6 - 3);
+
             let dest = {
                 x: baseDest.x + scatterX,
                 z: baseDest.z + scatterZ
@@ -615,6 +645,9 @@
             else if (['lf', 'wall_l', 'wall_l_deep', 'line_l', 'foul_lf'].includes(result.dir)) primaryFielder = 'lf';
             else if (['rf', 'wall_r', 'wall_r_deep', 'line_r', 'texas_r', 'foul_rf'].includes(result.dir)) primaryFielder = 'rf';
             else if (['c', 'foul_c'].includes(result.dir)) primaryFielder = 'c';
+            
+            if (result.dir === 'lc_deep') primaryFielder = (Math.random() < 0.5) ? 'lf' : 'cf';
+            if (result.dir === 'rc_deep') primaryFielder = (Math.random() < 0.5) ? 'rf' : 'cf';
 
             let backupFielder = 'lf';
             if (result.isDeflected) {
@@ -626,18 +659,20 @@
             let fPos = fielders[result.isDeflected ? backupFielder : primaryFielder];
             let distToBall = Math.sqrt(Math.pow(dest.x - fPos.x, 2) + Math.pow(dest.z - fPos.z, 2));
             
-            // 성인 전력질주 반영, 수비수 뛰는 최대 시간 제한(아무리 멀어도 질질 끌지 않음)
+            // [수정] 제한 캡 삭제, 순수 8m/s 전력질주 물리엔진 적용
             let fielderRunTime = distToBall / 8.0; 
-            if (dest.z >= -60 && fielderRunTime > 1.2) fielderRunTime = 1.2; // 내야 한계시간
-            if (dest.z < -60 && fielderRunTime > 2.5) fielderRunTime = 2.5; // 외야 한계시간
 
             if (!['single', 'extra', 'infield_hit', 'groundout', 'foul_drop'].includes(result.type) || result.trajectory === 'fly' || primaryFielder === 'c') {
-                fielderRunTime = 0;
+                fielderRunTime = 0; // 플라이 아웃의 경우 제때 도착하여 캐치함
             }
 
-            let totalBallMoveTime = flightTime + fielderRunTime;
+            // [수정] 펜스를 맞거나 바닥에 구르는 동안 수비수가 쫓아가는데 걸리는 시간 도출
+            let chaseTime = 0;
+            if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
+                chaseTime = Math.max(0.5, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
+            }
 
-            // [수정] 외야 타구일 경우 카메라를 외야 한눈에 보이게 30미터 상공 뷰로 전환 (X축은 0 고정)
+            // [수정] 단타 이상 시 리스너 뷰를 30m 상공, 외야 전체가 조망되는 위치로 전환
             if (dest.z <= -60 || ['single', 'extra'].includes(result.type)) {
                 audioCtx.listener.positionX.setTargetAtTime(0, now, 0.2);
                 audioCtx.listener.positionY.linearRampToValueAtTime(30, now + flightTime); 
@@ -648,28 +683,27 @@
                 audioCtx.listener.positionZ.setTargetAtTime(15, now, 0.2);
             }
 
-            // [수정] 바운드 소리 완전 제거 및 비행음(바람 소리)이 목적지 도착 시간까지 절대 끊기지 않고 연속 재생
-            playBallFlightSound(0, 0, dest.x, dest.z, totalBallMoveTime, result.power);
+            // 공 비행음 + 수비수 추적 구르는음까지 끊임없이 연결 재생
+            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.power, result.trajectory, false);
 
-            // [수정] 실시간 동기화 TTS. 타격 직후 타구 방향부터 즉시 브리핑.
             speak(`타구 속도 ${result.vel}마일! ${result.msgInit}`);
 
+            let timeToCatch = flightTime + chaseTime;
+
             if (result.isDeflected) {
-                await sleep(flightTime * 1000); // 타구가 내야수에게 도달하는 시점
+                await sleep(flightTime * 1000); 
                 let bkName = backupFielder === 'lf' ? '좌익수' : '우익수';
                 speak(`${result.msgDeflect} ${bkName} 빠르게 백업 들어옵니다!`);
-                await sleep(fielderRunTime * 1000); // 백업 수비수가 쫓아가는 시점
+                await sleep(chaseTime * 1000); 
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${bkName} 공 잡았습니다.`);
             } else if (result.type === 'groundout' || result.type === 'infield_hit') {
-                await sleep(flightTime * 1000);
-                await sleep(fielderRunTime * 1000);
+                await sleep(timeToCatch * 1000);
                 playGloveCatchSound(dest.x, dest.z);
-                
                 let infName = primaryFielder === 'p' ? '투수' : (primaryFielder === '1b' ? '1루수' : (primaryFielder === '2b' ? '2루수' : (primaryFielder === '3b' ? '3루수' : '유격수')));
                 speak(`${infName} 공 잡았습니다.`);
             } else {
-                await sleep(totalBallMoveTime * 1000);
+                await sleep(timeToCatch * 1000);
                 playGloveCatchSound(dest.x, dest.z); 
                 speak(result.msgCatch);
             }
@@ -688,16 +722,18 @@
                 let throwTime = distanceThrow / (throwSpeedMph * 0.44704);
                 if (throwTime < 0.2) throwTime = 0.2;
 
-                // [수정] 수비수가 던지는 공 소리, 글러브 포구까지 연결
-                playBallFlightSound(dest.x, dest.z, targetCoord.x, targetCoord.z, throwTime, 2); 
+                // [수정] 송구 전용 사운드 출력 (isThrow=true로 폭발적인 볼륨 적용)
+                let throwPower = (dest.z < -60) ? 3 : 2;
+                playBallFlightSound(dest.x, dest.z, targetCoord.x, targetCoord.z, throwTime, 0, throwPower, 'line', true); 
                 
-                // [수정] 카메라(리스너)를 다시 내야 베이스 쪽으로 복귀 (X축은 0 고정 유지)
+                // 송구 시 리스너 뷰를 즉시 다시 내야 베이스로 복귀 하강시킴
                 let throwStart = audioCtx.currentTime;
                 audioCtx.listener.positionX.setTargetAtTime(0, throwStart, 0.2);
                 audioCtx.listener.positionY.linearRampToValueAtTime(10, throwStart + throwTime);
                 audioCtx.listener.positionZ.linearRampToValueAtTime(15, throwStart + throwTime);
 
-                let totalDefensiveTime = flightTime + fielderRunTime + fieldingTime + throwTime;
+                // 누적된 지연시간(비행+추적+글러브+송구)으로 세이프/아웃 판정
+                let totalDefensiveTime = timeToCatch + fieldingTime + throwTime;
                 let isDefFielder = result.isDeflected ? backupFielder : primaryFielder;
                 
                 if (result.type === 'single') {
@@ -716,7 +752,7 @@
                     if (isSafe) {
                         speak(`세이프! 타자 주자 발이 더 빠릅니다! ${targetBase === '2b' ? '2루' : '3루'}에 미끄러져 들어갑니다!`);
                     } else {
-                        speak(`아웃! ${targetBase === '2b' ? '2루' : '3루'}에서 태그 아웃! 정확한 보살입니다!`);
+                        speak(`아웃! ${targetBase === '2b' ? '2루' : '3루'}에서 태그 아웃! 외야의 정확한 보살입니다!`);
                     }
                     await sleep(800);
                 } else {
@@ -729,7 +765,7 @@
 
                     let isSafe = result.runnerTime < totalDefensiveTime;
                     if (isSafe) {
-                        speak(`세이프! 내야 안타! 간발의 차이로 살아나갑니다!`);
+                        speak(`세이프! 발이 먼저 들어갔습니다! 내야 안타!`);
                     } else {
                         speak(`아웃! 1루에서 아웃입니다!`);
                     }
