@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.036</div>
+        <div class="version-text">2026-05-08 버전 1.037</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -198,13 +198,21 @@
             }
         }
 
-        function playHitSound(isBuntHit = false) {
+// [수정] 정타 여부(isPowerHit)를 추가로 받아 타격 타이밍 40 이하일 경우 powerhit1, 2 랜덤 재생
+        function playHitSound(isBuntHit = false, isPowerHit = false) {
             let bufferName = isBuntHit ? "bunt" : `hit${Math.floor(Math.random() * 3) + 1}`;
+            if (isPowerHit && !isBuntHit) {
+                bufferName = `powerhit${Math.floor(Math.random() * 2) + 1}`;
+            }
             if (audioBuffers[bufferName]) {
                 const source = audioCtx.createBufferSource(); source.buffer = audioBuffers[bufferName];
                 source.connect(audioCtx.destination); source.start();
             }
         }
+
+
+
+
 
         function playBatFoulSound() {
             if (audioBuffers["foul1"]) {
