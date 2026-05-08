@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.041</div>
+        <div class="version-text">2026-05-08 버전 1.042</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -231,15 +231,17 @@
             }
         }
 
-// [수정] Web Audio API의 정밀 시간 스케줄링(timeOffset) 적용 및 HRTF 모델 통일
+// [수정] 스테레오 파일의 공간감 상실(중앙 집중)을 막기 위해 channelCount = 1 강제 적용 및 정적 좌표 할당
         function playBounceSound(x, z, timeOffset = 0) {
             const now = audioCtx.currentTime + timeOffset;
             const panner = audioCtx.createPanner();
-            // 심판 아웃 콜과 공간감을 완벽히 일치시키기 위해 HRTF로 변경
             panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
-            panner.positionX.setValueAtTime(x, now);
-            panner.positionZ.setValueAtTime(z, now);
-            panner.positionY.setValueAtTime(0, now); 
+            panner.channelCount = 1; panner.channelCountMode = "explicit"; // 오디오를 강제 모노로 묶어 3D 위치를 명확히 함
+            
+            panner.positionX.value = x;
+            panner.positionZ.value = z;
+            panner.positionY.value = 0; 
+            
             if (audioBuffers["bounce"]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["bounce"];
                 src.connect(panner); panner.connect(audioCtx.destination); src.start(now);
@@ -250,7 +252,8 @@
         function playUmpireSound(type, x, z) {
             const panner = audioCtx.createPanner();
             panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
-            // 심판의 입 높이를 고려하여 Y축 1.5m 설정
+            panner.channelCount = 1; panner.channelCountMode = "explicit";
+            
             panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 1.5; 
 
             let bufferName = "";
@@ -261,15 +264,16 @@
 
             if (audioBuffers[bufferName]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers[bufferName];
-                const gain = audioCtx.createGain(); gain.gain.value = 1.5; // 심판 목소리 볼륨 증폭
+                const gain = audioCtx.createGain(); gain.gain.value = 1.5; 
                 src.connect(panner); panner.connect(gain); gain.connect(audioCtx.destination); src.start();
             }
         }
 
         function playFenceSound(x, z) {
             const panner = audioCtx.createPanner();
-            // 펜스 타격음 역시 HRTF로 변경하여 방향 지각 오류 해결
             panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
+            panner.channelCount = 1; panner.channelCountMode = "explicit";
+            
             panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 0; 
             if (audioBuffers["fence"]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["fence"];
@@ -279,7 +283,6 @@
                 src.connect(panner); panner.connect(audioCtx.destination); src.start();
             }
         }
-
 
 
 
@@ -351,10 +354,11 @@ if (trajectory === 'fly') {
 // [수정] 포구음 다양성을 위해 glove 1~3번 모두 랜덤 사용 및 자연스러운 공간감 적용
         function playGloveCatchSound(x, z) {
             const panner = audioCtx.createPanner();
-            // 포구음과 아웃 심판 콜이 완벽히 같은 위치에서 들리도록 HRTF 적용
+            // 포구음과 아웃 심판 콜이 완벽히 같은 위치에서 들리도록 HRTF 적용 및 스테레오 분산 방지
             panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
+            panner.channelCount = 1; panner.channelCountMode = "explicit";
+            
             panner.positionX.value = x; panner.positionZ.value = z; panner.positionY.value = 0;
-
 
 
             
@@ -703,6 +707,14 @@ if (swingType === 'big') {
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             } 
+
+
+
+
+
+
+
+
             else if (swingType === 'short') {
                 if (timeDiff <= 45) { // [수정] 짧은 스윙 정타 범위 확대
                     if (r < 30) return hitOF('single', 'texas_l', getVel(80, 95), "좌측 애매한 위치 뜹니다!", "", 'fly');
@@ -1096,12 +1108,16 @@ if (totalDefensiveTime < targetRunnerTime - 1.0) {
 } else {
                     let coverText = "";
                     if (targetBase === '1b') {
-                        // [수정] 1루 커버 디테일 향상: 1루수 강습 시 2루수 커버, 투수/포수 강습 시 1루수 커버, 내야 맞고 굴절 시 투수 커버
-                        if (activeFielderKey === '1b') coverText = " 2루수 베이스 커버!";
-                        else if (activeFielderKey === 'p' || activeFielderKey === 'c') coverText = " 1루수 베이스 커버!";
-                        else if (activeFielderKey === '2b' && result.isDeflected) coverText = " 투수 베이스 커버!";
+                        // [수정] 1루 커버 디테일 최종 교정
+                        if (activeFielderKey === '1b') {
+                            coverText = " 투수 베이스 커버!"; // 1루수가 직접 타구를 쫓아 포구했을 때
+                        } else if (activeFielderKey === '2b' && result.isDeflected && primaryFielder === '1b') {
+                            coverText = " 투수 베이스 커버!"; // 1루수 맞고 굴절되어 2루수가 잡았을 때 (1루 비어있음)
+                        } 
+                        // 유격수 맞고 굴절되어 2루수가 잡았을 땐 1루수가 베이스에 있으므로 정상 포구 (커버 멘트 생략)
                     }
                     speak(`1루로 송구!${coverText}`);
+
 
 
 
