@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.059</div>
+        <div class="version-text">2026-05-09 버전 1.060</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -870,16 +870,25 @@ if (timeDiff <= 40) {
 
             panner.connect(gain); gain.connect(audioCtx.destination);
 
-// [수정] Math.floor로 인해 마지막 0.1~0.2초 구간의 발소리가 생략되는 현상을 막기 위해 Math.ceil 적용
-            let stepCount = Math.ceil(duration / 0.3);
+let stepCount = Math.ceil(duration / 0.3);
             if (stepCount === 0 && duration > 0.1) stepCount = 1; 
             for (let i = 0; i < stepCount; i++) {
                 let stepTime = now + (i * 0.3);
                 if (audioBuffers["walk1"]) {
                     const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["walk1"];
                     src.connect(panner); src.start(stepTime);
+                    activeNodes.push({ type: 'step', src: src });
                 }
             }
+        }
+
+        function stopStepNodes() {
+            const now = audioCtx.currentTime;
+            activeNodes.forEach(node => {
+                if (node.type === 'step') {
+                    try { node.src.stop(now); } catch(e) {}
+                }
+            });
         }
 
 
@@ -909,10 +918,15 @@ if (timeDiff <= 40) {
                 'wall_rc': { x: 35, z: -155 }, 'wall_l_deep': { x: -60, z: -150 }, 
                 'wall_r_deep': { x: 60, z: -150 }, 
                 'foul_c': { x: 0, z: 0 }, 'foul_1b': { x: 50, z: -15 }, 'foul_3b': { x: -50, z: -15 },
-                'foul_lf': { x: -80, z: -90 }, 'foul_rf': { x: 80, z: -90 },
-                'p3b': { x: -10, z: -20 }, 'ss_deep': { x: -15, z: -60 }, 
-                '3b_deep': { x: -25, z: -45 }, '2b_deep': { x: 15, z: -60 }, 
+
+
+'foul_lf': { x: -80, z: -90 }, 'foul_rf': { x: 80, z: -90 },
+                'p3b': { x: -10, z: -20 }, 'ss_deep': { x: -14, z: -53 }, 
+                '3b_deep': { x: -28, z: -43 }, '2b_deep': { x: 14, z: -53 }, 
                 'p1b': { x: 10, z: -20 }, 'lc_deep': { x: -30, z: -140 },
+
+
+
                 'rc_deep': { x: 30, z: -140 },
                 'past1b2b': { x: 28, z: -90 }, 'past23between': { x: -28, z: -90 }
             };
@@ -1032,13 +1046,15 @@ if (result.isDeflected) {
                 }
             }
 
-            // [신설] 야구장 아치형 펜스 경계선 구축 (중앙 -160, 좌우로 갈수록 짧아짐)
-            let fenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
-            if (result.trajectory === 'wall') {
-                dest.z = fenceZ; // 담장 타구는 난수 무시하고 무조건 담장 위치에 정확히 꽂힘
+let fenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
+            if (result.type === 'hr') {
+                dest.z = fenceZ - (Math.random() * 10 + 5); 
+            } else if (result.trajectory === 'wall') {
+                dest.z = fenceZ; 
             } else if (dest.z < fenceZ) {
-                dest.z = fenceZ; // 아무리 세게 굴러도 펜스를 뚫을 수 없음
+                dest.z = fenceZ; 
             }
+
 
             let primaryFielder = 'cf';
 
@@ -1149,15 +1165,20 @@ let fielderSpeed = isOutfield ? 7.5 : 6.5;
                         }
                     }
                     actualRunTime = flightTime;
-                } else {
+
+
+} else {
                     if (result.type === 'flyout') { 
                         result.type = 'single'; 
                         result.msgCatch = `${baseFielderNames[activeFielderKey]} 앞에 떨어지는 안타!`; 
                     } else if (result.type === 'foul_flyout') { 
                         result.type = 'foul_drop'; 
-                        result.msgCatch = "쫓아갔지만 잡지 못했습니다."; 
+                        result.msgCatch = ""; 
                     }
                 }
+
+
+
             }
 
 
@@ -1211,15 +1232,22 @@ let fielderRunTime = actualRunTime;
             audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
             audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + flightTime + chaseTime);
 
-            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
+let actualRollTime = (result.isDeflected || result.isDivingMiss) ? chaseTime : 0;
+            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, actualRollTime, result.vel, result.trajectory, false);
 
             if (diveMsg !== "") {
                 setTimeout(() => { speak(diveMsg); }, (flightTime * 0.4) * 1000);
             }
 
             if (result.type === 'foul_drop') {
-                setTimeout(() => { speak("파울!"); }, flightTime * 1000);
+                setTimeout(() => { 
+                    speak("파울!"); 
+                    stopStepNodes();
+                }, flightTime * 1000);
             }
+
+
+
 
             if (result.isDeflected) {
                 playBounceSound(baseDest.x + scatterX, baseDest.z + scatterZ, flightTime);
@@ -1260,18 +1288,20 @@ let fielderRunTime = actualRunTime;
             };
             let caughtByName = getFielderName(activeFielderKey);
 
-if (result.trajectory === 'wall') {
+if (result.type === 'hr') {
+                await sleep(flightTime * 1000);
+                playBounceSound(dest.x, dest.z, 0); 
+                speak(result.msgCatch); 
+                stopStepNodes();
+            } else if (result.trajectory === 'wall') {
                 await sleep(flightTime * 1000); 
                 playFenceSound(dest.x, dest.z);
                 speak("펜스 때립니다!");
                 if (chaseTime > 0) await sleep(chaseTime * 1000);
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
-
-
-} else if (result.isDeflected || result.isDivingMiss) {
+            } else if (result.isDeflected || result.isDivingMiss) {
                 await sleep(flightTime * 1000); 
-                
                 let deflectMsg = result.msgCatch || result.msgDeflect;
                 if (result.isDeflected && isFarDeflection && dest.z < -55) {
                     deflectMsg += " 공이 외야로 빠져나갑니다!";
@@ -1280,6 +1310,7 @@ if (result.trajectory === 'wall') {
                 
                 if (result.type === 'foul_drop') {
                     await sleep(1000);
+                    stopStepNodes();
                     updateListenerPosition(false); 
                     isInPlay = false; 
                     speak("타석 복귀.");
@@ -1294,25 +1325,24 @@ if (result.trajectory === 'wall') {
                 } else {
                     speak(`${caughtByName} 잡았습니다.`);
                 }
-
-} else if (['single', 'extra'].includes(result.type)) {
-
-
-
-
+            } else if (['single', 'extra'].includes(result.type)) {
                 await sleep(flightTime * 1000);
+                let currentFenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
+                let isHitFence = (dest.z <= currentFenceZ + 1.0);
+                
+                if (isHitFence) {
+                    playFenceSound(dest.x, dest.z);
+                    speak("펜스를 맞춥니다!");
+                }
+                
                 if (chaseTime > 0) {
-                    await sleep(chaseTime * 1000);
-                    // 현재 위치(X)에 맞는 진짜 펜스 좌표를 계산하여 충돌 여부 완벽 판정
-                    let currentFenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
-                    if (dest.z <= currentFenceZ + 1.0) {
-                        playFenceSound(dest.x, dest.z);
-                        speak("펜스를 맞춥니다!");
-                        await sleep(0.5 * 1000); 
-                    }
+                    let waitTime = isHitFence ? Math.max(0, chaseTime - 0.5) : chaseTime;
+                    await sleep(waitTime * 1000);
                 }
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 공 잡았습니다.`);
+
+
 
 
 
@@ -1444,14 +1474,11 @@ if (['single', 'extra'].includes(result.type)) {
                             playGloveCatchSound(targetCoord.x, targetCoord.z);
                             playUmpireSound('out', targetCoord.x, targetCoord.z);
                         } else {
-                            speak(`송구가 빠릅니다. 주자 ${prevBaseName}로 귀루합니다. ${targetBaseName}로 송구!${coverText}`);
+                            speak(`${targetBaseName}로 송구!${coverText}`);
                             await sleep(throwTime * 1000);
                             playGloveCatchSound(targetCoord.x, targetCoord.z);
                         }
                     } else if (totalDefensiveTime > targetRunnerTime + 1.5) {
-
-
-
                         speak(`주자 계속 달립니다! ${targetBaseName}로 송구!${coverText}`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
@@ -1468,7 +1495,6 @@ if (['single', 'extra'].includes(result.type)) {
                     }
                     await sleep(800);
                 } else {
-                    // 내야 땅볼 아웃/안타 판정
                     speak(`${targetBaseName}로 송구!${coverText}`);
                     await sleep(throwTime * 1000); 
                     playGloveCatchSound(targetCoord.x, targetCoord.z); 
@@ -1486,6 +1512,7 @@ if (['single', 'extra'].includes(result.type)) {
                 await sleep(1500); 
             }
 
+            stopStepNodes();
             updateListenerPosition(false); 
             isInPlay = false; 
             speak("타석 복귀.");
