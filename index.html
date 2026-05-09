@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.052</div>
+        <div class="version-text">2026-05-09 버전 1.053</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -748,14 +748,19 @@ function calculateHitResult(swingType, timeDiff) {
                 if (timeDiff <= 20) { 
                     if (r < 15) return hitOF('hr', 'wall_c', getVel(100, 115), "가운데 뻗어가는 타구!", "담장 넘어가는 홈런!", 'fly');
                     if (r < 25) return hitOF('hr', 'wall_l', getVel(100, 115), "좌측 담장 향해 날아갑니다!", "홈런!", 'fly');
-                    if (r < 35) return hitOF('extra', 'wall_c', getVel(95, 110), "가운데 담장 직격하는 타구!", "", 'wall'); 
+
+
+if (r < 35) return hitOF('extra', 'wall_c', getVel(95, 110), "가운데 깊숙하게 뻗어가는 타구!", "", 'wall'); 
                     if (r < 45) return hitOF('extra', 'wall_r_deep', getVel(95, 110), "우측 깊숙한 타구!", "", 'wall'); 
-                    if (r < 55) return hitOF('extra', 'lc_deep', getVel(95, 110), "좌중간 완전히 가르는 타구!", "", 'wall');
+                    if (r < 55) return hitOF('extra', 'lc_deep', getVel(95, 110), "좌중간 깊은 타구!", "", 'wall');
                     if (r < 65) return hitOF('extra', 'rc_deep', getVel(95, 110), "우중간 깊숙한 타구!", "", 'wall');
-                    if (r < 75) return hitOF('extra', 'wall_c', getVel(90, 105), "가운데 깊은 타구!", "", 'fly'); // 아웃 대신 뜬공 타구로 설정, 잡을지 말지는 물리엔진이 판단
-                    if (r < 85) return hitOF('extra', 'wall_l', getVel(90, 105), "좌측 담장 앞!", "", 'fly');
-                    if (r < 95) return hitOF('extra', 'wall_r', getVel(90, 105), "우측 뻗어가는 타구!", "", 'fly');
-                    return hitOF('single', 'cf', getVel(85, 105), "가운데 솟구친 타구!", "", 'fly');
+                    if (r < 75) return hitOF('extra', 'wall_c', getVel(90, 105), "가운데 뻗어가는 타구!", "", 'fly'); 
+                    if (r < 85) return hitOF('extra', 'wall_l', getVel(90, 105), "좌측 깊은 타구!", "", 'fly');
+                    if (r < 95) return hitOF('extra', 'wall_r', getVel(90, 105), "우측 깊은 타구!", "", 'fly');
+                    return hitOF('single', 'cf', getVel(85, 105), "가운데 높게 뜬 타구!", "", 'fly');
+
+
+
                 } else if (timeDiff <= 70) { 
                     if (r < 10) return hitOF('single', 'past1b2b', getVel(85, 100), "1,2루간 날카로운 타구!", "", 'line'); 
                     if (r < 45) return hardHitInfield(getVel(85, 105));
@@ -769,11 +774,16 @@ function calculateHitResult(swingType, timeDiff) {
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
             } 
             else if (swingType === 'short') {
-                if (timeDiff <= 40) { 
-                    if (r < 30) return hitOF('single', 'texas_l', getVel(80, 95), "좌측 애매한 위치 뜹니다!", "", 'fly');
-                    if (r < 50) return hitOF('single', 'texas_r', getVel(80, 95), "우측 얕은 곳 향합니다!", "", 'fly');
-                    if (r < 75) return hitOF('single', 'texas_c', getVel(80, 95), "중견수 앞 떨어지는 타구!", "", 'fly');
-                    if (r < 85) return hitOF('extra', 'line_r', getVel(85, 100), "1루 선상 뻗어가는 타구!", "", 'line');
+
+
+if (timeDiff <= 40) { 
+                    if (r < 30) return hitOF('single', 'texas_l', getVel(80, 95), "좌측 얕은 타구!", "", 'fly');
+                    if (r < 50) return hitOF('single', 'texas_r', getVel(80, 95), "우측 얕은 타구!", "", 'fly');
+                    if (r < 75) return hitOF('single', 'texas_c', getVel(80, 95), "중견수 쪽 얕은 타구!", "", 'fly');
+                    if (r < 85) return hitOF('extra', 'line_r', getVel(85, 100), "1루 선상 강한 타구!", "", 'line');
+
+
+
                     return grounder('2b_deep', getVel(75, 95), "2루수 깊은 곳 땅볼!", "", Math.random() < 0.1);
                 } else if (timeDiff <= 75) { 
                     if (r < 25) return hardHitInfield(getVel(70, 90));
@@ -911,9 +921,25 @@ let baseDest = coords[result.dir] || coords['cf'];
             let scatterX = 0;
             let scatterZ = 0;
 
+
             if (result.dir === 'p' || result.dir === 'c') {
                 scatterX = 0; scatterZ = 0;
+            } else if (result.dir === 'line_l' || result.dir === 'line_r') {
+                // 페어라인 타구: 100~150(펜스)까지 무작위 도착. 선상을 따라 구름.
+                baseDest.z = -(Math.random() * 50 + 100);
+                baseDest.x = (result.dir === 'line_l') ? (baseDest.z * (27.43/90)) : (baseDest.z * (-27.43/90));
+                scatterX = 0; scatterZ = 0;
+            } else if (result.dir.startsWith('texas_')) {
+                // 얕은 타구: Z 80~100 바운스
+                baseDest.z = -(Math.random() * 20 + 80);
+            } else if (['past1b2b', 'past23between', 'past2b'].includes(result.dir)) {
+                // 내야 빠져나가는 타구: Z 60~80 바운스
+                baseDest.z = -(Math.random() * 20 + 60);
+                scatterX = (Math.random() * 8 - 4);
+                scatterZ = -(Math.random() * 20 + 10);
             } else if (result.dir === 'foul_c') {
+
+
                 scatterX = (Math.random() * 6 - 3); // X축 이동을 양쪽 3m로 철저히 제한
                 // [수정] Z축은 포수 뒤 1m ~ 25m 사이로 떨어지도록 분리 (포구 가능: 1~10m / 그물망: 11~25m)
                 if (Math.random() < 0.6) {
@@ -937,32 +963,37 @@ let baseDest = coords[result.dir] || coords['cf'];
             let baseFielderNames = { 'p':'투수', 'c':'포수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수', 'lf':'좌익수', 'cf':'중견수', 'rf':'우익수' };
 
             // [추가] 능동형 내야수 다이빙 AI (공이 내야를 통과할 때 X좌표 기준 양옆 5m 이내면 자동으로 몸을 날림)
-            let isPassingInfield = ['past1b2b', 'past23between', 'past2b', 'line_l', 'line_r'].includes(result.dir) || (!isOutfield && Math.abs(dest.x) > 5 && Math.abs(dest.x) < 30);
-            if (isPassingInfield && ['single', 'extra', 'groundout'].includes(result.type)) {
-                let closestInf = null; let minDistToPath = Infinity;
-                for (let key of ['1b', '2b', '3b', 'ss']) {
-                    let inf = fielders[key];
-                    let ballXAtInfZ = dest.x * (inf.z / dest.z); 
-                    let d = Math.abs(ballXAtInfZ - inf.x);
-                    if (d < minDistToPath) { minDistToPath = d; closestInf = key; }
-                }
 
-if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
-                    diveMsg = `${baseFielderNames[closestInf]} 몸을 날립니다!`;
-                    let diveRoll = Math.random();
-                    if (diveRoll < 0.40) { // 40% 포구 성공
-                        result.type = (result.trajectory === 'line') ? 'flyout' : 'groundout';
-                        result.isDeflected = false;
-                        dest = { x: dest.x * (fielders[closestInf].z / dest.z), z: fielders[closestInf].z };
-                        result.msgCatch = "잡았습니다!";
-                    } else if (diveRoll < 0.60) { // 20% 맞고 굴절
-                        result.isDeflected = true;
-                        dest = { x: dest.x * (fielders[closestInf].z / dest.z), z: fielders[closestInf].z };
-                        result.msgDeflect = "몸을 날렸으나 글러브 맞고 굴절!";
-                    } else { // 40% 빠져나감
-                        // 외야로 빠져나가는 상황은 이어지는 외야수 포구 멘트에서 자연스럽게 처리됨
+let isPassingInfield = ['past1b2b', 'past23between', 'past2b', 'line_l', 'line_r'].includes(result.dir) || (!isOutfield && Math.abs(dest.x) > 5 && Math.abs(dest.x) < 30);
+                // 대표님 말씀대로, 굴러오는 공(ground)에는 다이빙하지 않고 강한 타구(line, fly)에만 몸을 날리도록 조건 추가
+                if (isPassingInfield && ['single', 'extra', 'groundout'].includes(result.type) && result.trajectory !== 'ground') {
+                    let closestInf = null; let minDistToPath = Infinity;
+                    for (let key of ['1b', '2b', '3b', 'ss']) {
+                        let inf = fielders[key];
+                        let ballXAtInfZ = dest.x * (inf.z / dest.z); 
+                        let d = Math.abs(ballXAtInfZ - inf.x);
+                        if (d < minDistToPath) { minDistToPath = d; closestInf = key; }
                     }
-                }
+
+    if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
+                        diveMsg = `${baseFielderNames[closestInf]} 몸을 날립니다!`;
+                        let diveRoll = Math.random();
+                        if (diveRoll < 0.40) { // 40% 포구 성공
+                            result.type = (result.trajectory === 'line') ? 'flyout' : 'groundout';
+                            result.isDeflected = false;
+                            // [수정] 수비수를 명확히 묶어두기 위한 플래그
+                            result.isDivingCatch = true; 
+                            result.diver = closestInf;
+                            dest = { x: dest.x * (fielders[closestInf].z / dest.z), z: fielders[closestInf].z };
+                            result.msgCatch = "잡았습니다!";
+                        } else if (diveRoll < 0.60) { // 20% 맞고 굴절
+                            result.isDeflected = true;
+                            dest = { x: dest.x * (fielders[closestInf].z / dest.z), z: fielders[closestInf].z };
+                            result.msgDeflect = "몸을 날렸으나 글러브 맞고 굴절!";
+                        } else { // 40% 빠져나감
+                            result.msgDeflect = "몸을 날렸으나 빠져나갑니다!";
+                        }
+                    }
 
 
 
@@ -996,22 +1027,24 @@ if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
                 else primaryFielder = 'cf';
             }
 
+
             let activeFielderKey = primaryFielder;
-            if (result.isDeflected || diveMsg.includes("잡았습니다")) {
-                if (diveMsg.includes("잡았습니다")) {
-                    for (let key in baseFielderNames) { if (diveMsg.startsWith(baseFielderNames[key])) activeFielderKey = key; }
-                } else {
-                    let minDist = Infinity;
-                    let closestFielder = 'cf';
-                    let allowedFielders = (isFarDeflection && dest.z < -60) ? ['lf', 'cf', 'rf'] : Object.keys(fielders);
-                    for (let key of allowedFielders) {
-                        if (key === 'c' && dest.z < -20) continue; 
-                        let d = Math.sqrt(Math.pow(dest.x - fielders[key].x, 2) + Math.pow(dest.z - fielders[key].z, 2));
-                        if (d < minDist) { minDist = d; closestFielder = key; }
-                    }
-                    activeFielderKey = closestFielder;
+            if (result.isDivingCatch) {
+                activeFielderKey = result.diver;
+            } else if (result.isDeflected) {
+                let minDist = Infinity;
+                let closestFielder = 'cf';
+                let allowedFielders = (isFarDeflection && dest.z < -60) ? ['lf', 'cf', 'rf'] : Object.keys(fielders);
+                for (let key of allowedFielders) {
+                    if (key === 'c' && dest.z < -20) continue; 
+                    let d = Math.sqrt(Math.pow(dest.x - fielders[key].x, 2) + Math.pow(dest.z - fielders[key].z, 2));
+                    if (d < minDist) { minDist = d; closestFielder = key; }
                 }
+                activeFielderKey = closestFielder;
             }
+
+
+
 
             let fPos = fielders[activeFielderKey];
             let distToDest = Math.sqrt(Math.pow(dest.x, 2) + Math.pow(dest.z, 2));
@@ -1035,14 +1068,41 @@ if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
             let fielderSpeed = isOutfield ? 7.5 : 6.5;
             let actualRunTime = distToBall / fielderSpeed; 
             
-            // [혁신적 관망 버그 파괴 AI] 수비수가 공보다 일찍 도착한다면? 관망하지 않고 런닝 캐치로 잡아서 아웃시킴!
+            // [혁신적 관망 버그 파괴 AI 및 외야수 다이빙 시스템]
             if (result.trajectory === 'fly' && !result.isDeflected) {
-                if (actualRunTime <= flightTime + 0.1) {
+                let maxRunDist = fielderSpeed * flightTime;
+                if (distToBall <= maxRunDist + 0.1) {
                     if (['single', 'extra', 'foul_drop'].includes(result.type)) {
                         result.type = result.type.includes('foul') ? 'foul_flyout' : 'flyout';
                         result.msgCatch = `${baseFielderNames[activeFielderKey]} 달려와서 잡아냅니다!`;
                     }
-                    actualRunTime = flightTime; // 공이 떨어질 때까지 발소리가 끊기지 않고 이어지며 도착과 동시에 포구
+                    actualRunTime = flightTime; 
+                } else if (isOutfield && distToBall <= maxRunDist + 6.0) {
+                    // 외야수 다이빙 반경(6m 이내) 진입 시 능동적 확률 적용
+                    let outDiveRoll = Math.random();
+                    diveMsg = `${baseFielderNames[activeFielderKey]}, 다이빙 캐치!`;
+                    
+                    if (outDiveRoll < 0.50) { // 50% 포구 성공
+                        result.type = result.type.includes('foul') ? 'foul_flyout' : 'flyout';
+                        result.msgCatch = "잡았습니다!";
+                    } else if (outDiveRoll < 0.70) { // 20% 앞에 떨어짐
+                        result.type = result.type.includes('foul') ? 'foul_drop' : 'single';
+                        dest.z += (Math.random() * 4 + 6); // 타겟 앞쪽(6~10m)으로 공이 떨어짐
+                        result.msgCatch = "다이빙 했으나 글러브 맞고 앞에 떨어집니다!";
+                        result.isDeflected = true;
+                    } else if (outDiveRoll < 0.90) { // 20% 뒤로 흘림
+                        result.type = result.type.includes('foul') ? 'foul_drop' : 'extra';
+                        dest.z -= (Math.random() * 5 + 10); // 타겟 뒤쪽(10~15m)으로 빠짐
+                        result.msgCatch = "몸을 날렸지만 글러브 맞고 뒤로 빠집니다!";
+                        result.isDeflected = true;
+                    } else { // 10% 완전히 빠트림
+                        result.type = result.type.includes('foul') ? 'foul_drop' : 'extra';
+                        dest.z -= (Math.random() * 20 + 30); // 타겟 뒤로 30m~펜스까지 쭉 빠짐
+                        if (dest.z < -150) dest.z = -150;
+                        result.msgCatch = "완전히 빠트렸습니다! 공이 뒤로 굴러갑니다!";
+                        result.isDeflected = true;
+                    }
+                    actualRunTime = flightTime;
                 } else {
                     // 수비가 늦었다면 뜬공 아웃될 타구도 앞에 떨어지는 안타(파울)로 변함
                     if (result.type === 'flyout') {
@@ -1054,6 +1114,9 @@ if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
                     }
                 }
             }
+
+
+
 
             let fielderRunTime = actualRunTime; 
             if (activeFielderKey === 'c') { fielderRunTime = 0; actualRunTime = 0; }
@@ -1105,13 +1168,21 @@ if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
             
 
             // [수정] 굴절 바운스 소리가 씹히는 현상을 막기 위해 isDeflected를 조건문 최상단으로 끌어올림
+
             if (result.isDeflected) {
                 playBounceSound(baseDest.x + scatterX, baseDest.z + scatterZ, flightTime);
                 playBounceSound(dest.x, dest.z, flightTime + 0.3);
             } else if (result.trajectory === 'ground' || result.isDivingMiss) {
                 playBounceSound(dest.x * 0.3, dest.z * 0.3, 0.15);
                 if (flightTime + chaseTime > 0.6) playBounceSound(dest.x * 0.6, dest.z * 0.6, 0.4);
+            } else if (result.dir.startsWith('texas_') || ['past1b2b', 'past23between', 'past2b', 'line_l', 'line_r'].includes(result.dir)) {
+                // 얕은/빠져나가는 타구, 페어라인 타구 바운스 추가 (멈추지 않음)
+                playBounceSound(baseDest.x, baseDest.z, flightTime * 0.6);
+                playBounceSound(dest.x, dest.z, flightTime);
             } else if (result.trajectory === 'wall') {
+
+
+
                 playBounceSound(dest.x, dest.z, flightTime + 0.3);
             } else if (['single', 'extra', 'foul_drop'].includes(result.type)) {
                 playBounceSound(dest.x, dest.z, flightTime);
@@ -1155,18 +1226,24 @@ if (result.trajectory === 'wall') {
                 } else {
                     speak(`${caughtByName} 잡았습니다.`);
                 }
-            } else if (['single', 'extra'].includes(result.type)) {
 
 
-
-
-
-
+} else if (['single', 'extra'].includes(result.type)) {
                 await sleep(flightTime * 1000);
-                if (chaseTime > 0) await sleep(chaseTime * 1000);
+                if (chaseTime > 0) {
+                    await sleep(chaseTime * 1000);
+                    // 펜스 부근(-140m 이상)까지 굴러간 공은 능동적으로 펜스 충돌음 발생
+                    if (dest.z <= -150) {
+                        playFenceSound(dest.x, dest.z);
+                        speak("펜스를 맞춥니다!");
+                        await sleep(0.5 * 1000); 
+                    }
+                }
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 공 잡았습니다.`);
             } else if (result.type === 'groundout' || result.type === 'infield_hit') {
+
+
                 await sleep(timeToCatch * 1000);
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
@@ -1174,14 +1251,16 @@ if (result.trajectory === 'wall') {
                 await sleep(timeToCatch * 1000);
                 if (result.type !== 'foul_drop') playGloveCatchSound(dest.x, dest.z); 
                 
-                if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes("아웃")) {
+if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes("아웃")) {
                     playUmpireSound('out', dest.x, dest.z);
                     let cleanedMsg = result.msgCatch.replace(/아웃!|아웃\./g, "").trim();
                     if (cleanedMsg) speak(cleanedMsg);
                 } else {
                     speak(result.msgCatch); 
-                    if (result.type === 'foul_drop') playUmpireSound('strike', !isLeftBatter ? 2.5 : -2.5, 0);
+                    // [수정] 파울 시 심판이 '스트라이크'를 외치는 버그 삭제 완료.
                 }
+
+
             }
 
             if (['groundout', 'infield_hit', 'single', 'extra'].includes(result.type)) {
@@ -1241,17 +1320,27 @@ let totalDefensiveTime = timeToThrow + throwTime;
                 
                 let baseFielderNames = { 'p':'투수', 'c':'포수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수' };
                 let closestBaseCover = 'p';
-                let minCoverDist = Infinity;
+
+
+let minCoverDist = Infinity;
                 for (let key of ['p', 'c', '1b', '2b', '3b', 'ss']) {
-                    if (key === activeFielderKey) continue; // 공을 던지는 본인은 베이스 커버를 갈 수 없음
+                    if (key === activeFielderKey) continue; 
                     let d = Math.sqrt(Math.pow(targetCoord.x - fielders[key].x, 2) + Math.pow(targetCoord.z - fielders[key].z, 2));
                     if (d < minCoverDist) {
                         minCoverDist = d;
                         closestBaseCover = key;
                     }
                 }
+
+                // 1루수가 수비 시, 거리에 상관없이 투수가 1루 커버를 가도록 강제
+                if (targetBase === '1b' && activeFielderKey === '1b') {
+                    closestBaseCover = 'p';
+                }
                 
                 let coverText = "";
+
+
+
                 // [수정] 포구한 수비수 위치에서 던져야 할 베이스까지의 거리가 5m 이내로 매우 가깝다면? (ex. 1루수가 1루 근처에서 포구)
                 let distToTargetBase = Math.sqrt(Math.pow(dest.x - targetCoord.x, 2) + Math.pow(dest.z - targetCoord.z, 2));
                 
@@ -1271,10 +1360,18 @@ let totalDefensiveTime = timeToThrow + throwTime;
 
 
 
-                if (['single', 'extra'].includes(result.type)) {
+if (['single', 'extra'].includes(result.type)) {
                     if (totalDefensiveTime < targetRunnerTime - 1.0) {
-                        speak(`송구가 빠릅니다. 주자 ${prevBaseName}로 귀루합니다. ${targetBaseName}로 송구!${coverText}`);
+                        // 1루에서는 홈으로 귀루하는 엉터리 룰을 삭제하고 그냥 1루로 바로 쏩니다
+                        if (targetBase === '1b') {
+                            speak(`1루로 송구!${coverText}`);
+                        } else {
+                            speak(`송구가 빠릅니다. 주자 ${prevBaseName}로 귀루합니다. ${targetBaseName}로 송구!${coverText}`);
+                        }
                         await sleep(throwTime * 1000);
+
+
+
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
                     } else if (totalDefensiveTime > targetRunnerTime + 1.5) {
                         speak(`주자 계속 달립니다! ${targetBaseName}로 송구!${coverText}`);
