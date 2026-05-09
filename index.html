@@ -24,12 +24,27 @@
 <body>
     <div id="ariaAnnouncer" class="sr-only" aria-live="assertive"></div>
 
-    <div id="mainMenuScreen" class="screen active">
+<div id="mainMenuScreen" class="screen active">
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.049</div>
+
+        <button id="btnGoVolume">3. 소리 설정</button>
+
+
+        <div class="version-text">2026-05-09 버전 1.050</div>
     </div>
+
+    <div id="volumeScreen" class="screen">
+        <h1>소리 설정</h1>
+        <label for="volumeSlider">마스터 볼륨 (좌우 방향키로 조절)</label>
+        <input type="range" id="volumeSlider" min="0" max="100" value="100" step="5">
+        <div>
+            <button id="btnBackFromVolume">뒤로가기</button>
+        </div>
+    </div>
+
+
 
     <div id="singlePlayerScreen" class="screen">
         <h1>개인 플레이</h1>
@@ -59,12 +74,33 @@
             }
         }
 
-        document.getElementById("btnGoSinglePlayer").addEventListener("click", () => { switchScreen("singlePlayerScreen", "btnBattingPractice"); });
+document.getElementById("btnGoSinglePlayer").addEventListener("click", () => { switchScreen("singlePlayerScreen", "btnBattingPractice"); });
         document.getElementById("btnBackToMain").addEventListener("click", () => { switchScreen("mainMenuScreen", "btnGoSinglePlayer"); });
         document.getElementById("btnGoHelp").addEventListener("click", () => { speak("도움말 메뉴는 아직 준비 중입니다."); });
+        
+        // [추가] 볼륨 설정 메뉴 스크립트
+        document.getElementById("btnGoVolume").addEventListener("click", () => { 
+            switchScreen("volumeScreen", "volumeSlider"); 
+            speak("소리 설정 메뉴입니다. 좌우 방향키로 볼륨을 조절하세요."); 
+        });
+        document.getElementById("btnBackFromVolume").addEventListener("click", () => { switchScreen("mainMenuScreen", "btnGoSinglePlayer"); });
+        document.getElementById("volumeSlider").addEventListener("change", (e) => {
+            let vol = e.target.value;
+            masterGain.gain.value = vol / 100;
+            speak(vol + " 퍼센트");
+            if (audioBuffers["powerhit1"]) {
+                const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["powerhit1"];
+                src.connect(audioCtx.destination); src.start();
+            }
+        });
+
         document.getElementById("btnPitchingPractice").addEventListener("click", () => { speak("투구 연습 모드는 아직 준비 중입니다."); });
+
+
+
         document.getElementById("btnPracticeMatch").addEventListener("click", () => { speak("연습경기 모드는 아직 준비 중입니다."); });
         
+
         document.getElementById("btnBattingPractice").addEventListener("click", () => {
             switchScreen("gameScreen", "gameArea");
             speak("타격 연습 시작. 쉬프트나 컨트롤을 눌러 스윙을 고정하고 스페이스바로 타격하세요.");
@@ -79,12 +115,28 @@
             }
         });
 
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const audioBuffers = {}; 
         const pitchBufferCache = {}; 
         
+        // [추가] 마스터 볼륨 제어용 글로벌 게인 노드 및 라우팅 패치
+        const masterGain = audioCtx.createGain();
+        masterGain.gain.value = 1.0;
+        masterGain.connect(audioCtx.destination);
+        
+        const originalConnect = AudioNode.prototype.connect;
+        AudioNode.prototype.connect = function() {
+            if (arguments[0] === audioCtx.destination) {
+                return originalConnect.call(this, masterGain);
+            }
+            return originalConnect.apply(this, arguments);
+        };
+        
 // 탁한 포구음(glove3) 복구하여 다양성 추가 및 정타(powerhit) 소리 추가
-        const SOUND_URLS = { 
+        const SOUND_URLS = {
+
+
+
             hit1: "hit1.ogg", hit2: "hit2.ogg", hit3: "hit3.ogg",
             powerhit1: "powerhit1.ogg", powerhit2: "powerhit2.ogg",
             glove1: "glove1.ogg", glove2: "glove2.ogg", glove3: "glove3.ogg",
@@ -686,16 +738,29 @@ const hitOF = (type, dir, vel, msgInit, msgCatch, trajectory = 'line', isDivingM
                 let rand = Math.random();
                 let dir = (rand < 0.25) ? '1b' : (rand < 0.5 ? '2b' : (rand < 0.75 ? '3b' : 'ss'));
                 let infielder = (dir === '1b') ? '1루수' : (dir === '2b' ? '2루수' : (dir === '3b' ? '3루수' : '유격수'));
-                
-                // [수정] 2루수와 유격수는 정면, 1/3루수는 선상으로 멘트를 완벽히 분리
                 let dirName = "";
-                if (dir === '1b') dirName = "1루 선상";
-                else if (dir === '2b') dirName = "2루수 정면";
-                else if (dir === '3b') dirName = "3루 선상";
-                else dirName = "유격수 정면";
+                if (dir === '1b') dirName = "1루 선상"; else if (dir === '2b') dirName = "2루수 정면";
+                else if (dir === '3b') dirName = "3루 선상"; else dirName = "유격수 정면";
                 
-                if (rand < 0.3) return outCatch(dir, vel, `${dirName} 강한 타구!`, `${infielder} 직선타 아웃!`, 'line');
-                if (rand < 0.6) return grounder(dir, vel, `${dirName} 강습 타구!`, `${infielder} 맞고 굴절!`, Math.random() < 0.1, true);
+                let r2 = Math.random();
+                if (r2 < 0.15) return outCatch(dir, vel, `${dirName} 강한 타구!`, `${infielder} 직선타 아웃!`, 'line');
+                
+                // [추가] 내야수 몸을 날리는 다이빙 캐치 이벤트 (포구 40% / 굴절 30% / 빠져나감 30%)
+                if (r2 < 0.45) {
+                    let isCatch = Math.random() < 0.4; // 40% 확률로 캐치 성공
+                    if (isCatch) {
+                        return outCatch(dir, vel, `${dirName} 강습 타구!`, `${infielder} 몸을 날려 캐치! 아웃!`, 'line');
+                    } else {
+                        let isDeflect = Math.random() < 0.5; // 놓쳤을 때 50% 확률로 글러브 맞고 굴절
+                        if (isDeflect) return grounder(dir, vel, `${dirName} 빠른 타구!`, `${infielder} 몸을 날렸으나 글러브 맞고 굴절!`, Math.random() < 0.1, true);
+                        
+                        let pierceDir = (dir === 'ss' || dir === '3b') ? 'past23between' : 'past1b2b';
+                        return hitOF('single', pierceDir, vel, `${dirName} 강습 타구!`, `${infielder} 몸을 날렸지만 옆을 스쳐 외야로 빠져나갑니다!`, 'line');
+                    }
+                }
+                
+                // 일반 굴절 및 안타
+                if (r2 < 0.7) return grounder(dir, vel, `${dirName} 강습 타구!`, `${infielder} 맞고 굴절!`, Math.random() < 0.1, true);
                 
                 let pierceDir = (dir === 'ss' || dir === '3b') ? 'past23between' : 'past1b2b';
                 return hitOF('single', pierceDir, vel, `${dirName} 빠져나가는 타구!`, ``, 'line');
@@ -805,9 +870,15 @@ if (r < 75) return hitOF('extra', 'line_r', getVel(85, 100), "1루 선상 뻗어
 
 
 // [추가] 수비수 발소리 (공간 음향 적용, 0.3초 간격 재생)
-        function playFielderSteps(startX, startZ, endX, endZ, duration) {
+        function playFielderSteps(startX, startZ, endX, endZ, duration, startTimeOffset = 0) {
             if (duration <= 0) return;
-            const now = audioCtx.currentTime;
+            // [수정] 굴절 타구 시 공이 튀는 순간까지 대기하도록 Offset 추가 (멍때리는 정적 제거)
+            const now = audioCtx.currentTime + startTimeOffset;
+
+
+
+
+
             const panner = audioCtx.createPanner();
             // [수정] equalpower 대신 인간의 귀(두상)를 시뮬레이션하는 HRTF 모델을 적용하여 좁은 각도에서도 좌우 방향감이 확실하게 들리도록 개선
             panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
@@ -849,11 +920,15 @@ if (r < 75) return hitOF('extra', 'line_r', getVel(85, 100), "1루 선상 뻗어
 
 
 // [수정] 대표님 지시대로 내야 간격 축소 및 외야/펜스 거리 대폭 확장 개편
+
             const coords = {
                 'c':  { x: 0, z: 0 }, 'p':  { x: 0, z: -18 },
-                '3b': { x: -18, z: -30 }, 'ss': { x: -6, z: -45 },     
-                '2b': { x: 6, z: -45 }, '1b': { x: 18, z: -30 },         
+                '3b': { x: -15, z: -35 }, 'ss': { x: -6, z: -45 },     
+                '2b': { x: 6, z: -45 }, '1b': { x: 15, z: -35 },         
                 'lf': { x: -45, z: -120 }, 'cf': { x: 0, z: -130 },      
+
+
+
                 'rf': { x: 45, z: -120 }, '1b2b': { x: 12, z: -40 }, 
                 '23between': { x: -12, z: -40 }, 'past2b': { x: 0, z: -85 }, 
                 'texas_l': { x: -30, z: -90 }, 'texas_r': { x: 30, z: -90 },  
@@ -874,8 +949,8 @@ if (r < 75) return hitOF('extra', 'line_r', getVel(85, 100), "1루 선상 뻗어
 
             const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, 
-                '1b': {x: 18, z: -30}, '2b': {x: 6, z: -45},
-                '3b': {x: -18, z: -30}, 'ss': {x: -6, z: -45}, 
+                '1b': {x: 15, z: -35}, '2b': {x: 6, z: -45},
+                '3b': {x: -15, z: -35}, 'ss': {x: -6, z: -45}, 
                 // [수정] 외야수 시작 위치를 담장 앞쪽으로 깊게 배치하여 수비 범위 현실화
                 'lf': {x: -45, z: -120}, 'cf': {x: 0, z: -130}, 'rf': {x: 45, z: -120}
             };
@@ -1002,19 +1077,23 @@ let isFarDeflection = false;
 
 
 // [수정] 수비수 이동 속도 현실화 (외야 7m/s, 내야 5m/s)
-            let fielderSpeed = isOutfield ? 7.0 : 5.0;
-            let fielderRunTime = distToBall / fielderSpeed; 
+
+let fielderSpeed = isOutfield ? 7.5 : 6.5;
+            let actualRunTime = distToBall / fielderSpeed; // [수정] 수비수가 실제로 달리는 데 걸리는 순수 시간
+            let fielderRunTime = actualRunTime; 
 
             if (activeFielderKey === 'c') {
-                fielderRunTime = 0; 
+                fielderRunTime = 0; actualRunTime = 0;
             }
 
             let chaseTime = 0;
+            let stepStartOffset = 0;
             if (result.isDeflected || result.isDivingMiss) {
                 chaseTime = fielderRunTime; 
+                stepStartOffset = flightTime; 
             } else if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
                 chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
-                fielderRunTime = flightTime + chaseTime;
+                fielderRunTime = flightTime + chaseTime; // 전체 수비 지연 시간 갱신
             } else if (result.type === 'groundout') {
                 fielderRunTime = flightTime + chaseTime;
             }
@@ -1023,9 +1102,12 @@ let isFarDeflection = false;
                 fielderRunTime = flightTime + chaseTime;
             }
 
-            if (fielderRunTime > 0.1) {
-                playFielderSteps(fPos.x, fPos.z, dest.x, dest.z, fielderRunTime);
+            if (actualRunTime > 0.1) {
+                // [수정] 공을 기다리는 멍때리는 시간에는 발소리가 나지 않도록, 실제 뛴 시간(actualRunTime)만큼만 발소리 재생!
+                playFielderSteps(fPos.x, fPos.z, dest.x, dest.z, actualRunTime, stepStartOffset);
             }
+
+
 
             audioCtx.listener.positionX.setValueAtTime(0, now);
             audioCtx.listener.positionY.setValueAtTime(0, now);
@@ -1167,20 +1249,40 @@ if (result.trajectory === 'wall') {
                 audioCtx.listener.positionY.linearRampToValueAtTime(0, throwStart + throwTime);
                 audioCtx.listener.positionZ.linearRampToValueAtTime(targetCoord.z + 15, throwStart + throwTime);
 
-                let totalDefensiveTime = timeToThrow + throwTime;
+let totalDefensiveTime = timeToThrow + throwTime;
+                
+                let baseFielderNames = { 'p':'투수', 'c':'포수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수' };
+                let closestBaseCover = 'p';
+                let minCoverDist = Infinity;
+                for (let key of ['p', 'c', '1b', '2b', '3b', 'ss']) {
+                    if (key === activeFielderKey) continue; // 공을 던지는 본인은 베이스 커버를 갈 수 없음
+                    let d = Math.sqrt(Math.pow(targetCoord.x - fielders[key].x, 2) + Math.pow(targetCoord.z - fielders[key].z, 2));
+                    if (d < minCoverDist) {
+                        minCoverDist = d;
+                        closestBaseCover = key;
+                    }
+                }
                 
                 let coverText = "";
-                if (targetBase === '1b') {
-                    if (activeFielderKey === '1b') coverText = " 투수 베이스 커버!"; 
-                    else if (activeFielderKey === '2b' && result.isDeflected && primaryFielder === '1b') coverText = " 투수 베이스 커버!"; 
-                } else if (targetBase === '2b') {
-                    if (activeFielderKey === 'ss') coverText = " 2루수 베이스 커버!";
-                    else if (activeFielderKey === '2b') coverText = " 유격수 베이스 커버!";
-                } else if (targetBase === '3b') {
-                    if (activeFielderKey === '3b') coverText = " 유격수 베이스 커버!";
+                // [수정] 포구한 수비수 위치에서 던져야 할 베이스까지의 거리가 5m 이내로 매우 가깝다면? (ex. 1루수가 1루 근처에서 포구)
+                let distToTargetBase = Math.sqrt(Math.pow(dest.x - targetCoord.x, 2) + Math.pow(dest.z - targetCoord.z, 2));
+                
+                if (targetBase === 'c') {
+                    coverText = ` 포수, 홈에서 태그!`;
+                } else if (distToTargetBase < 5.0) {
+                    // [수정] 억지로 송구하지 않고 직접 뛰어가서 베이스를 밟음
+                    coverText = ` ${baseFielderNames[activeFielderKey]} 직접 베이스 터치!`;
+                    throwTime = 0.5; // 던지는 시간 대신 밟는 여유 시간으로 단축
+                    totalDefensiveTime = timeToThrow + throwTime;
+                } else {
+                    let baseN = targetBase === '1b' ? '1루' : (targetBase === '2b' ? '2루' : '3루');
+                    coverText = ` ${baseFielderNames[closestBaseCover]}, ${baseN} 베이스 커버!`;
                 }
 
                 // 능동적 주루 판정 음성 출력 (단타/장타 상황)
+
+
+
                 if (['single', 'extra'].includes(result.type)) {
                     if (totalDefensiveTime < targetRunnerTime - 1.0) {
                         speak(`송구가 빠릅니다. 주자 ${prevBaseName}로 귀루합니다. ${targetBaseName}로 송구!${coverText}`);
