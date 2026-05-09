@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.067</div>
+        <div class="version-text">2026-05-09 버전 1.068</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -810,8 +810,8 @@ if (r < 85) return hitOF('extra', 'wall_l', getVel(90, 105), "좌측 깊은 타�
                     if (r < 60) return grounder('ss_deep', getVel(70, 90), "3유간 깊은 곳 타구!", "", Math.random() < 0.1);
 
 if (r < 80) {
-                        return Math.random() < 0.5 ? foulFly('foul_lf', getVel(75, 95), "좌측 높게 뜬 공!", "좌익수 파울 지역에서 걷어냅니다!") 
-                                                   : foulFly('foul_rf', getVel(75, 95), "우측 높게 뜬 공!", "우익수 파울 지역에서 걷어냅니다!");
+                        return Math.random() < 0.5 ? foulFly('foul_3b', getVel(60, 80), "3루측 높게 뜬 공!", "3루수 파울 지역에서 걷어냅니다!") 
+                                                   : foulFly('foul_1b', getVel(60, 80), "1루측 높게 뜬 공!", "1루수 파울 지역에서 걷어냅니다!");
                     }
 
 
@@ -1210,9 +1210,11 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
             let actualRunTime = distToBall / fielderSpeed; 
             let stepStartOffset = 0;
 
-            if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isDeflected && !result.isDivingCatch && !result.isDivingMiss && !result.isJumpHit) {
-                let maxRunDist = fielderSpeed * flightTime;
-                
+if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isDeflected && !result.isDivingCatch && !result.isDivingMiss && !result.isJumpHit) {
+                let maxRunDist = fielderSpeed * (isOutfield ? Math.max(0, flightTime - 1.0) : flightTime);
+
+          
+      
                 if (isNetting) {
                     result.type = 'foul_drop';
                     result.msgCatch = "";
@@ -1350,9 +1352,11 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
 
 
 if (result.isDeflected) {
-                playBounceSound(baseDest.x + scatterX, baseDest.z + scatterZ, flightTime);
-                playBounceSound(dest.x, dest.z, flightTime + 0.3);
+                playBounceSound(dest.x, dest.z, flightTime + 0.2);
             } else if (result.trajectory === 'ground') {
+
+
+
                 playBounceSound(dest.x * 0.3, dest.z * 0.3, 0.15);
                 if (flightTime + chaseTime > 0.6) playBounceSound(dest.x * 0.6, dest.z * 0.6, 0.4);
             } else if (['line_l', 'line_r'].includes(result.dir)) {
@@ -1461,8 +1465,10 @@ if (result.type === 'hr') {
 
 } else if (['single', 'extra'].includes(result.type)) {
                 await sleep(flightTime * 1000);
-                let currentFenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
-                let isHitFence = (dest.z <= currentFenceZ + 1.0);
+
+
+let currentFenceZ = -160 + (Math.min(Math.abs(dest.x), 75) / 75) * 10;
+                let isHitFence = (result.trajectory === 'wall') || (dest.z <= currentFenceZ + 1.0);
                 
                 if (isHitFence) {
                     playFenceSound(dest.x, dest.z);
