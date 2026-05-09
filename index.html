@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.058</div>
+        <div class="version-text">2026-05-09 버전 1.059</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -940,21 +940,19 @@ let baseDest = coords[result.dir] || coords['cf'];
             let scatterZ = 0;
 
 
-            if (result.dir === 'p' || result.dir === 'c') {
+// 타구별 바운스 위치 조절
+if (result.dir === 'p' || result.dir === 'c') {
                 scatterX = 0; scatterZ = 0;
             } else if (result.dir === 'line_l' || result.dir === 'line_r') {
-                // 페어라인 타구: 100~150(펜스)까지 무작위 도착. 선상을 따라 구름.
-                baseDest.z = -(Math.random() * 50 + 100);
+                baseDest.z = -(Math.random() * 20 + 40);
                 baseDest.x = (result.dir === 'line_l') ? (baseDest.z * (27.43/90)) : (baseDest.z * (-27.43/90));
                 scatterX = 0; scatterZ = 0;
             } else if (result.dir.startsWith('texas_')) {
-                // 얕은 타구: Z 80~100 바운스
-                baseDest.z = -(Math.random() * 20 + 80);
+                baseDest.z = -(Math.random() * 20 + 60);
             } else if (['past1b2b', 'past23between', 'past2b'].includes(result.dir)) {
-                // 내야 빠져나가는 타구: Z 60~80 바운스
                 baseDest.z = -(Math.random() * 20 + 60);
                 scatterX = (Math.random() * 8 - 4);
-                scatterZ = -(Math.random() * 20 + 10);
+                scatterZ = 0;
             } else if (result.dir === 'foul_c') {
 
 
@@ -1022,7 +1020,7 @@ if (diveRoll < 0.40) {
 
             }
 
-            if (result.isDeflected) {
+if (result.isDeflected) {
                 if (Math.random() < 0.2) {
                     isFarDeflection = true;
                     dest.x += (Math.random() * 30) - 15; 
@@ -1034,7 +1032,18 @@ if (diveRoll < 0.40) {
                 }
             }
 
+            // [신설] 야구장 아치형 펜스 경계선 구축 (중앙 -160, 좌우로 갈수록 짧아짐)
+            let fenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
+            if (result.trajectory === 'wall') {
+                dest.z = fenceZ; // 담장 타구는 난수 무시하고 무조건 담장 위치에 정확히 꽂힘
+            } else if (dest.z < fenceZ) {
+                dest.z = fenceZ; // 아무리 세게 굴러도 펜스를 뚫을 수 없음
+            }
+
             let primaryFielder = 'cf';
+
+
+
             if (['3b', 'foul_3b', '3b_deep'].includes(result.dir)) primaryFielder = '3b';
             else if (['p', 'p1b', 'p3b'].includes(result.dir)) primaryFielder = 'p';
             else if (['ss', '23between', 'texas_l', 'ss_deep'].includes(result.dir)) primaryFielder = 'ss';
@@ -1120,13 +1129,20 @@ let fielderSpeed = isOutfield ? 7.5 : 6.5;
                             dest.z -= (Math.random() * 5 + 10); 
                             result.msgCatch = "글러브 맞고 뒤로 빠집니다!";
                             result.isDeflected = true;
-                        } else if (outDiveRoll < 0.80) { 
+
+
+
+} else if (outDiveRoll < 0.80) { 
                             result.type = result.type.includes('foul') ? 'foul_drop' : 'extra';
                             dest.z -= (Math.random() * 20 + 30); 
-                            if (dest.z < -150) dest.z = -150;
+                            let maxZ = -160 + (Math.abs(dest.x) / 75) * 10;
+                            if (dest.z < maxZ) dest.z = maxZ;
                             result.msgCatch = "글러브 맞고 완전히 뒤로 빠집니다!";
                             result.isDeflected = true;
-                        } else { 
+                        } else {
+
+
+
                             result.type = result.type.includes('foul') ? 'foul_drop' : 'extra';
                             result.msgCatch = "몸을 날렸으나 공이 그대로 지나갑니다!";
                             result.isDeflected = false;
@@ -1287,8 +1303,9 @@ if (result.trajectory === 'wall') {
                 await sleep(flightTime * 1000);
                 if (chaseTime > 0) {
                     await sleep(chaseTime * 1000);
-                    // 펜스 부근(-140m 이상)까지 굴러간 공은 능동적으로 펜스 충돌음 발생
-                    if (dest.z <= -150) {
+                    // 현재 위치(X)에 맞는 진짜 펜스 좌표를 계산하여 충돌 여부 완벽 판정
+                    let currentFenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
+                    if (dest.z <= currentFenceZ + 1.0) {
                         playFenceSound(dest.x, dest.z);
                         speak("펜스를 맞춥니다!");
                         await sleep(0.5 * 1000); 
@@ -1296,6 +1313,10 @@ if (result.trajectory === 'wall') {
                 }
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 공 잡았습니다.`);
+
+
+
+
             } else if (result.type === 'groundout' || result.type === 'infield_hit') {
 
 
