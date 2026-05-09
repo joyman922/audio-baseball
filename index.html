@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.062</div>
+        <div class="version-text">2026-05-09 버전 1.063</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1171,10 +1171,12 @@ let fielderSpeed = isOutfield ? 7.5 : 6.5;
 let isNetting = (result.dir === 'foul_c' && dest.z > 10);
             let hitsGroundEarly = ['past1b2b', 'past23between', 'past2b', 'line_l', 'line_r'].includes(result.dir) || result.dir.startsWith('texas_');
 
-            // [수정] hitsGroundEarly 제한을 풀고 대신 catch 시 'flyout'이 아닌 'single'로 처리하여 바운스음을 살림
-            if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isDeflected) {
+            // 내야수가 다이빙을 시도한 타구(!result.isDivingCatch && !result.isDivingMiss)는 외야수가 공중에서 스포일러하지 못하도록 접근을 전면 차단
+            if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isDeflected && !result.isDivingCatch && !result.isDivingMiss) {
                 let maxRunDist = fielderSpeed * flightTime;
                 
+
+
                 if (isNetting) {
                     result.type = 'foul_drop';
                     result.msgCatch = "";
@@ -1382,9 +1384,12 @@ if (result.type === 'hr') {
                 }
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
-            } else if (result.isDeflected || result.isDivingMiss) {
+
+
+} else if (result.isDeflected || result.isDivingMiss) {
                 await sleep(flightTime * 1000); 
-                let deflectMsg = result.msgCatch || result.msgDeflect;
+                // msgCatch 스포일러 방지 및 내야수 다이빙 결과 우선 출력
+                let deflectMsg = result.msgDeflect || result.msgCatch;
                 if (result.isDeflected && isFarDeflection && dest.z < -55) {
                     deflectMsg += " 공이 외야로 빠져나갑니다!";
                 }
@@ -1402,12 +1407,17 @@ if (result.type === 'hr') {
                 if (chaseTime > 0) await sleep(chaseTime * 1000); 
                 playGloveCatchSound(dest.x, dest.z);
                 
-                if (['lf', 'cf', 'rf'].includes(activeFielderKey) && isFarDeflection) {
-                    speak(`외야까지 굴러간 공, ${caughtByName} 잡았습니다.`);
+                // 내야를 완전히 빠져나가 외야수가 주워야 하는 상황을 명확히 설명
+                let isOutfieldRoll = ['lf', 'cf', 'rf'].includes(activeFielderKey) && (isFarDeflection || !result.isDeflected);
+                if (isOutfieldRoll) {
+                    speak(`외야로 빠져나간 공, ${caughtByName} 처리합니다.`);
                 } else {
                     speak(`${caughtByName} 잡았습니다.`);
                 }
             } else if (result.type === 'foul_drop') {
+
+
+
                 await sleep(flightTime * 1000);
                 stopStepNodes();
                 await sleep(400); 
