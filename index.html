@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.055</div>
+        <div class="version-text">2026-05-09 버전 1.056</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -57,7 +57,7 @@
     <div id="gameScreen" class="screen">
         <h1>타격 연습</h1>
         <label for="gameArea">야구 게임 컨트롤 창</label>
-        <textarea id="gameArea" readonly aria-label="타격 연습창. 쉬프트/컨트롤로 스윙 변경. 스페이스바로 타격."></textarea>
+        <textarea id="gameArea" readonly aria-label="타격 연습창"></textarea>
         <div>
             <button id="btnExitGame">나가기</button>
         </div>
@@ -175,15 +175,19 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const baseFrequencies = [220.00, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00];
         function getPianoFrequency(noteIndex, octaveIndex) { return baseFrequencies[noteIndex] * Math.pow(2, octaveIndex - 2); }
 
-        const zoneTop = 1.05; const zoneBottom = 0.50; 
+const zoneTop = 1.05; const zoneBottom = 0.50; 
         const zoneInside = 2.5; const zoneOutside = -2.5; 
 
         let isLeftBatter = false, isPitching = false, hasSwung = false, isBunting = false, isInPlay = false; 
         let pitchStartTime = 0, pitchTimeout;
         let currentFlightTime = 0, lastPitchSpeedMph = 0, speedToggleState = 0; 
         let activeNodes = [], boxStep = 0, actualY, actualZ, isStrike = false, pitchResultText = "";
+        let rtBallStartX = 0, rtBallStartZ = 0, rtBallEndX = 0, rtBallEndZ = 0, rtBallStartTime = 0, rtBallFlightTime = 0.1;
         
-        let currentSwingMode = 'normal'; 
+        let currentSwingMode = 'normal';
+
+
+
 
         const announcer = document.getElementById("ariaAnnouncer");
         function speak(text) { announcer.textContent = ""; setTimeout(() => { announcer.textContent = text; }, 50); }
@@ -354,11 +358,21 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 
         // [수정] 0.1초 글리산도 오버랩 및 타구음 죽지 않도록 감쇄율 0.05 극한 고정
-        function playBallFlightSound(startX, startZ, endX, endZ, flightTime, rollTime, vel, trajectory = 'ground', isThrow = false) {
+
+function playBallFlightSound(startX, startZ, endX, endZ, flightTime, rollTime, vel, trajectory = 'ground', isThrow = false) {
             const now = audioCtx.currentTime;
+            
+            rtBallStartX = startX; rtBallStartZ = startZ; 
+            rtBallEndX = endX; rtBallEndZ = endZ;
+            rtBallStartTime = now; rtBallFlightTime = flightTime + rollTime;
+
             const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
             
-            let baseFreq = 800; 
+            let baseFreq = 800;
+
+
+
+
             let peakVol = 0.3; // 타구음 기본 볼륨 넉넉히
 
             if (isThrow) {
@@ -1075,9 +1089,10 @@ if (diveRoll < 0.40) {
             if (['single'].includes(result.type) && isOutfield) distToBall *= 0.4; 
 
 let fielderSpeed = isOutfield ? 7.5 : 6.5;
-            let reactionTime = isOutfield ? 0.8 : 0.2;
+            let reactionTime = isOutfield ? 1.5 : 0.2;
             let availableRunTime = Math.max(0, flightTime - reactionTime);
             let actualRunTime = distToBall / fielderSpeed; 
+            let stepStartOffset = 0;
             
             if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isDeflected) {
                 let maxRunDist = fielderSpeed * availableRunTime;
@@ -1086,7 +1101,8 @@ let fielderSpeed = isOutfield ? 7.5 : 6.5;
                         result.type = result.type.includes('foul') ? 'foul_flyout' : 'flyout';
                         result.msgCatch = `${baseFielderNames[activeFielderKey]} 잡아냅니다!`;
                     }
-                    actualRunTime = flightTime; 
+                    actualRunTime = distToBall / fielderSpeed;
+                    stepStartOffset = Math.max(reactionTime, flightTime - actualRunTime);
                 } else if (isOutfield && distToBall <= maxRunDist + 6.0) {
                     let outDiveRoll = Math.random();
                     diveMsg = `${baseFielderNames[activeFielderKey]}, 다이빙 캐치 시도!`;
@@ -1119,7 +1135,8 @@ let fielderSpeed = isOutfield ? 7.5 : 6.5;
                             result.isDeflected = false;
                         }
                     }
-                    actualRunTime = flightTime;
+                    actualRunTime = availableRunTime;
+                    stepStartOffset = reactionTime;
                 } else {
                     if (result.type === 'flyout') { 
                         result.type = 'single'; 
@@ -1134,22 +1151,27 @@ let fielderSpeed = isOutfield ? 7.5 : 6.5;
 
 
 
-            let fielderRunTime = actualRunTime; 
-            if (activeFielderKey === 'c') { fielderRunTime = 0; actualRunTime = 0; }
+let fielderRunTime = actualRunTime; 
+            if (activeFielderKey === 'c') { fielderRunTime = 0; actualRunTime = 0; stepStartOffset = 0; }
 
-let chaseTime = 0;
-            let stepStartOffset = 0;
+            let chaseTime = 0;
             
             if (result.isDeflected || result.isDivingMiss) {
                 let penalty = result.isDivingMiss ? 1.0 : 0.5;
                 let deflectDist = Math.sqrt(Math.pow(dest.x - baseDest.x, 2) + Math.pow(dest.z - baseDest.z, 2));
-                chaseTime = (deflectDist / fielderSpeed) + penalty; 
-                stepStartOffset = flightTime + penalty; 
+                let deflectRunTime = deflectDist / fielderSpeed;
+                
+                chaseTime = deflectRunTime + penalty; 
                 fielderRunTime = flightTime + chaseTime;
+                
+                if (actualRunTime > 0.1) {
+                    playFielderSteps(fPos.x, fPos.z, baseDest.x, baseDest.z, actualRunTime, stepStartOffset);
+                }
+                if (deflectRunTime > 0.1) {
+                    playFielderSteps(baseDest.x, baseDest.z, dest.x, dest.z, deflectRunTime, flightTime + penalty);
+                }
+                actualRunTime = 0; 
             } else {
-
-
-
                 if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
                     chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
                     fielderRunTime = flightTime + chaseTime; 
@@ -1158,29 +1180,23 @@ let chaseTime = 0;
                     fielderRunTime = flightTime + chaseTime;
                 }
                 
-                if (actualRunTime < fielderRunTime) {
-                    stepStartOffset = fielderRunTime - actualRunTime; 
+                if (actualRunTime < fielderRunTime && !result.isDivingCatch) {
+                    stepStartOffset = Math.max(reactionTime, fielderRunTime - actualRunTime); 
                 }
             }
-
-
-
 
             if (actualRunTime > 0.1) {
                 playFielderSteps(fPos.x, fPos.z, dest.x, dest.z, actualRunTime, stepStartOffset);
             }
 
-// [수정] 포수 뒤 파울 시 Z축 리스너 위치가 공을 따라 뒤(그물망 앞까지)로 빠지도록 완벽 추적
             let targetListenerZ = dest.z > 0 ? dest.z + 5 : Math.min(15, dest.z + 15);
             audioCtx.listener.positionX.setValueAtTime(0, now);
             audioCtx.listener.positionY.setValueAtTime(0, now);
             audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
             audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + flightTime + chaseTime);
 
-            // [복구] 날아갔던 타구/비행 소리 재생 함수 원상복구
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
 
-// 다이빙 멘트가 있다면 타구 비행 중간에 긴박하게 TTS 삽입
             if (diveMsg !== "") {
                 setTimeout(() => { speak(diveMsg); }, (flightTime * 0.4) * 1000);
             }
@@ -1189,36 +1205,33 @@ let chaseTime = 0;
                 setTimeout(() => { speak("파울!"); }, flightTime * 1000);
             }
 
-
-
-
-
-            
-
-            // [수정] 굴절 바운스 소리가 씹히는 현상을 막기 위해 isDeflected를 조건문 최상단으로 끌어올림
-
-if (result.isDeflected) {
+            if (result.isDeflected) {
                 playBounceSound(baseDest.x + scatterX, baseDest.z + scatterZ, flightTime);
                 playBounceSound(dest.x, dest.z, flightTime + 0.3);
             } else if (result.trajectory === 'ground') {
                 playBounceSound(dest.x * 0.3, dest.z * 0.3, 0.15);
                 if (flightTime + chaseTime > 0.6) playBounceSound(dest.x * 0.6, dest.z * 0.6, 0.4);
-            } else if (result.dir.startsWith('texas_') || ['past1b2b', 'past23between', 'past2b', 'line_l', 'line_r'].includes(result.dir)) {
+            } else if (['line_l', 'line_r'].includes(result.dir)) {
                 if (!['flyout', 'foul_flyout'].includes(result.type)) {
-                    playBounceSound(baseDest.x, baseDest.z, flightTime * 0.6);
+                    playBounceSound(result.dir === 'line_l' ? -27.43 : 27.43, -27.43, flightTime * 0.3);
+                    playBounceSound(baseDest.x * 0.7, baseDest.z * 0.7, flightTime * 0.7);
+                    playBounceSound(dest.x, dest.z, flightTime);
+                }
+            } else if (result.dir.startsWith('texas_') || ['past1b2b', 'past23between', 'past2b'].includes(result.dir)) {
+                if (!['flyout', 'foul_flyout'].includes(result.type)) {
+                    playBounceSound(dest.x * 0.8, dest.z * 0.8, flightTime * 0.6);
                     playBounceSound(dest.x, dest.z, flightTime);
                 }
             } else if (result.isDivingMiss && result.trajectory === 'fly') {
                 playBounceSound(dest.x, dest.z, flightTime);
             } else if (result.trajectory === 'wall') {
-
-
-
-
                 playBounceSound(dest.x, dest.z, flightTime + 0.3);
             } else if (['single', 'extra', 'foul_drop'].includes(result.type)) {
                 playBounceSound(dest.x, dest.z, flightTime);
             }
+
+
+
 
 
 
@@ -1607,13 +1620,28 @@ else if (result.inPlay) {
                 if (isPitching) return; 
                 if (!isLeftBatter) moveBackward(); else moveForward(); 
             }
-            else if (e.code === "ArrowDown") { 
+
+else if (e.code === "ArrowDown") { 
                 if (isPitching) return;
                 speak("현재 " + getBoxName(boxStep) + "입니다"); 
+            }
+            else if (e.key.toLowerCase() === "z") {
+                if (!isPitching && !isInPlay) { speak("현재 진행 중인 플레이가 없습니다."); return; }
+                let elapsed = audioCtx.currentTime - rtBallStartTime;
+                if (elapsed < 0) elapsed = 0;
+                let ratio = elapsed / rtBallFlightTime;
+                if (ratio > 1) ratio = 1;
+                let cX = rtBallStartX + (rtBallEndX - rtBallStartX) * ratio;
+                let cZ = rtBallStartZ + (rtBallEndZ - rtBallStartZ) * ratio;
+                speak(`현재 공 위치 X ${Math.round(cX)}, Z ${Math.round(cZ)}`);
             }
         });
 
         function preloadAllPitches() {
+
+
+
+
             const zOpts = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; 
             const yOpts = [0, 1, 2, 3, 4]; 
             
