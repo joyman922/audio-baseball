@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.070</div>
+        <div class="version-text">2026-05-09 버전 1.071</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -183,8 +183,11 @@ const zoneTop = 1.05; const zoneBottom = 0.50;
         let currentFlightTime = 0, lastPitchSpeedMph = 0, speedToggleState = 0; 
 
 let activeNodes = [], boxStep = 0, actualY, actualZ, isStrike = false, pitchResultText = "";
-        let rtBallStartX = 0, rtBallStartZ = 0, rtBallEndX = 0, rtBallEndZ = 0, rtBallStartTime = 0, rtBallFlightTime = 0.1;
+
+
+let rtBallStartX = 0, rtBallStartZ = 0, rtBallEndX = 0, rtBallEndZ = 0, rtBallStartTime = 0, rtBallFlightTime = 0.1, rtBallTrajectory = 'ground';
         let beaconSrc = null;
+
         
         let currentSwingMode = 'normal';
 
@@ -364,9 +367,10 @@ let activeNodes = [], boxStep = 0, actualY, actualZ, isStrike = false, pitchResu
 function playBallFlightSound(startX, startZ, endX, endZ, flightTime, rollTime, vel, trajectory = 'ground', isThrow = false) {
             const now = audioCtx.currentTime;
             
-            rtBallStartX = startX; rtBallStartZ = startZ; 
+rtBallStartX = startX; rtBallStartZ = startZ; 
             rtBallEndX = endX; rtBallEndZ = endZ;
-            rtBallStartTime = now; rtBallFlightTime = flightTime + rollTime;
+            rtBallStartTime = now; rtBallFlightTime = flightTime + rollTime; rtBallTrajectory = trajectory;
+
 
             const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
             
@@ -758,8 +762,9 @@ const hardHitInfield = (vel) => {
 
 const jumpHitInfield = (vel) => {
                 let rand = Math.random();
-                // Y축 및 도착 시간 정상화로 모든 수비수 롤백
-                let fKeys = ['p', '1b', '2b', '3b', 'ss', 'lf', 'cf', 'rf'];
+                // 투수, 포수 제외
+                let fKeys = ['1b', '2b', '3b', 'ss', 'lf', 'cf', 'rf'];
+
 
 
 
@@ -940,16 +945,17 @@ let stepCount = Math.ceil(duration / 0.3);
 function stopStepNodes() {
             const now = audioCtx.currentTime;
             activeNodes.forEach(node => {
-                if (node.type === 'step') {
-                    try { node.src.stop(now); } catch(e) {}
-                }
+                if (node.type === 'step') { try { node.src.stop(now); } catch(e) {} }
             });
-            stopRestingSound();
+            stopRestingSound(); clearInterval(window.rollInt);
         }
 
-        function playRestingSound(x, z) {
-            stopRestingSound();
+
+function playRestingSound(x, z, isRolling = false) {
+            stopRestingSound(); clearInterval(window.rollInt);
             if (audioBuffers["bounce"]) {
+
+
                 const panner = audioCtx.createPanner();
                 panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
                 panner.channelCount = 1; panner.channelCountMode = "explicit";
@@ -962,16 +968,15 @@ function stopStepNodes() {
                 const gain = audioCtx.createGain();
                 gain.gain.value = 0.4; 
                 
-                beaconSrc.connect(panner); panner.connect(gain); gain.connect(audioCtx.destination);
-                beaconSrc.start();
+beaconSrc.connect(panner); panner.connect(gain); gain.connect(audioCtx.destination);
+                if (!isRolling) beaconSrc.start();
+                if (isRolling) window.rollInt = setInterval(() => { playBounceSound(x, z, 0); }, 1500);
             }
         }
 
-        function stopRestingSound() {
-            if (beaconSrc) {
-                try { beaconSrc.stop(); } catch(e) {}
-                beaconSrc = null;
-            }
+function stopRestingSound() {
+            clearInterval(window.rollInt);
+            if (beaconSrc) { try { beaconSrc.stop(); } catch(e) {} beaconSrc = null; }
         }
 
 
@@ -1072,7 +1077,17 @@ if (result.dir === 'p' || result.dir === 'c') {
             }
 
 let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
+            if (result.dir.startsWith('texas_')) dest.z = -(Math.random() * 20 + 60);
+            if (['lf', 'wall_l', 'wall_l_deep'].includes(result.dir)) dest.x = -(Math.random() * 32 + 13);
+            if (['rf', 'wall_r', 'wall_r_deep'].includes(result.dir)) dest.x = (Math.random() * 32 + 13);
+            if (['cf', 'wall_c', 'texas_c'].includes(result.dir)) dest.x = (Math.random() * 24 - 12);
+            if (Math.abs(dest.x) > 76) { result.type = 'foul_drop'; result.trajectory = 'fly'; }
             let isFarDeflection = false;
+
+
+
+
+
             let diveMsg = "";
             let baseFielderNames = { 'p':'투수', 'c':'포수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수', 'lf':'좌익수', 'cf':'중견수', 'rf':'우익수' };
 
@@ -1099,10 +1114,14 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
                     dest = { x: fX + (Math.random()*12 - 6), z: fZ + (Math.random()*4 + 6) }; // 앞으로 6~10m
                     result.msgDeflect = `${baseFielderNames[closestFielder]} 점프했으나 맞고 앞으로 떨어집니다!`;
                     result.type = 'single';
-                } else if (jumpRoll < 0.90) { 
+
+
+} else if (jumpRoll < 0.90) { 
+                    let isInf = ['1b','2b','3b','ss'].includes(closestFielder);
                     result.isDeflected = true; result.isDivingMiss = true; result.diver = closestFielder;
-                    dest = { x: fX + (Math.random()*12 - 6), z: fZ - (Math.random()*20 + 20) }; // 뒤로 20~40m
+                    dest = { x: fX + (Math.random()*12 - 6), z: fZ - (isInf ? (Math.random()*20 + 40) : (Math.random()*10 + 20)) }; 
                     result.msgDeflect = `${baseFielderNames[closestFielder]} 점프했으나 맞고 완전히 뒤로 빠집니다!`;
+
 
 
 
@@ -1210,9 +1229,11 @@ if (result.isDeflected && !result.isJumpHit) {
             let flightTime = distToDest / speedMs;
             
 if (result.trajectory === 'fly') {
-                flightTime *= 1.35; // 1배속 기준 포물선 체공시간 비례 연장
+                flightTime *= 1.35; 
             }
+            if (result.dir === 'foul_c') flightTime = Math.random() * 2.0 + 3.0; // 포수 뜬공 최소 3초 보장
             if (result.trajectory === 'wall') flightTime *= 1.15;
+
 
 
 
@@ -1240,10 +1261,14 @@ if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isD
                         result.msgCatch = `${baseFielderNames[activeFielderKey]} 잡아냅니다!`;
                     }
                     actualRunTime = flightTime; 
-                } else if (isOutfield && distToBall <= maxRunDist + 6.0) {
+
+
+} else if (isOutfield && !hitsGroundEarly && distToBall <= maxRunDist + 6.0) {
                     let outDiveRoll = Math.random();
                     diveMsg = `${baseFielderNames[activeFielderKey]}, 다이빙 캐치 시도!`;
-                    if (outDiveRoll < 0.50) { 
+                    if (outDiveRoll < 0.50) {
+
+
                         result.type = result.type.includes('foul') ? 'foul_flyout' : (hitsGroundEarly ? 'single' : 'flyout');
                         result.msgCatch = "나이스 캐치! 잡아냅니다!";
                         result.isDivingCatch = true;
@@ -1251,11 +1276,15 @@ if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isD
                     } else {
                         result.isDivingMiss = true;
                         result.diver = activeFielderKey;
-                        if (outDiveRoll < 0.60) { 
+
+
+if (outDiveRoll < 0.60) { 
                             result.type = result.type.includes('foul') ? 'foul_drop' : 'single';
-                            dest.z += (Math.random() * 4 + 6); 
+                            dest.z = fPos.z + (Math.random() * 4 + 6); // 수비수 기준 앞으로 굴절
                             result.msgCatch = "글러브 맞고 앞에 떨어집니다!";
                             result.isDeflected = true;
+
+
                         } else if (outDiveRoll < 0.70) { 
                             result.type = result.type.includes('foul') ? 'foul_drop' : 'extra';
                             dest.z -= (Math.random() * 5 + 10); 
@@ -1378,8 +1407,8 @@ if (result.isDeflected) {
                     const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=dest.x; p.positionZ.value=dest.z;
                     const s = audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start(audioCtx.currentTime+flightTime);
                 }
-                playBounceSound(dest.x, dest.z, flightTime + 0.3);
             } else if (result.trajectory === 'ground') {
+
 
 
 
@@ -1420,9 +1449,15 @@ if (result.isDeflected) {
 
 
 
-            speak(`타구 속도 ${result.vel}마일! ${result.msgInit}`);
-
+let dirText = dest.x < -15 ? "좌측" : (dest.x > 15 ? "우측" : "중앙");
+            let trajText = result.trajectory === 'ground' ? "땅볼!" : (result.trajectory === 'fly' ? "뜬공!" : "빠른 타구!");
+            speak(`타구 속도 ${result.vel}마일! ${dirText} 방향 ${trajText}`);
+            if (dest.z < -60 && result.trajectory !== 'fly') {
+                setTimeout(() => { if(isInPlay) speak("외야로 들어갑니다."); }, (flightTime * (60 / Math.abs(dest.z))) * 1000);
+            }
             let timeToCatch = flightTime + chaseTime;
+
+
             const getFielderName = (key) => {
                 const names = { 'p':'투수', 'c':'포수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수', 'lf':'좌익수', 'cf':'중견수', 'rf':'우익수' };
                 return names[key];
@@ -1440,10 +1475,14 @@ if (result.type === 'hr') {
                 await sleep(flightTime * 1000); 
                 playFenceSound(dest.x, dest.z);
                 speak("펜스 때립니다!");
-                if (chaseTime > 0) {
-                    playRestingSound(dest.x, dest.z);
+
+
+if (chaseTime > 0) {
+                    playRestingSound(dest.x, dest.z, true);
                     await sleep(chaseTime * 1000);
                 }
+
+
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
 
@@ -1462,18 +1501,21 @@ if (result.type === 'hr') {
                     return;
                 }
 
-                if (chaseTime > 0) {
-                    playRestingSound(dest.x, dest.z);
-                    await sleep(chaseTime * 1000); 
+if (chaseTime > 0) {
+                    playRestingSound(dest.x, dest.z, true);
+                    await sleep(chaseTime * 1000);
                 }
+
+
                 playGloveCatchSound(dest.x, dest.z);
                 
-                let isOutfieldRoll = ['lf', 'cf', 'rf'].includes(activeFielderKey) && dest.z < -60;
+let isOutfieldRoll = ['lf', 'cf', 'rf'].includes(activeFielderKey) && dest.z < -60;
                 if (isOutfieldRoll) {
-                    speak(`외야로 빠져나간 공, ${caughtByName} 처리합니다.`);
+                    speak(`잡았습니다.`);
                 } else {
                     speak(`${caughtByName} 잡았습니다.`);
                 }
+
 
 
 
@@ -1502,11 +1544,15 @@ let currentFenceZ = -160 + (Math.min(Math.abs(dest.x), 75) / 75) * 10;
                     speak("펜스를 맞춥니다!");
                 }
                 
-                if (chaseTime > 0) {
-                    playRestingSound(dest.x, dest.z);
+if (chaseTime > 0) {
+                    playRestingSound(dest.x, dest.z, true);
                     let waitTime = isHitFence ? Math.max(0, chaseTime - 0.5) : chaseTime;
                     await sleep(waitTime * 1000);
                 }
+
+
+
+
                 playGloveCatchSound(dest.x, dest.z);
                 
                 // 다이빙/점프 캐치일 경우 일반 안타 멘트를 무시하고 본래의 캐치 멘트를 강제 출력
@@ -1519,10 +1565,16 @@ let currentFenceZ = -160 + (Math.min(Math.abs(dest.x), 75) / 75) * 10;
 
 
                 await sleep(flightTime * 1000);
-                if (chaseTime > 0) {
-                    playRestingSound(dest.x, dest.z);
+
+
+if (chaseTime > 0) {
+                    playRestingSound(dest.x, dest.z, true);
                     await sleep(chaseTime * 1000);
                 }
+
+
+
+
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
             } else {
@@ -1860,10 +1912,15 @@ else if (e.code === "ArrowDown") {
                 if (elapsed < 0) elapsed = 0;
                 let ratio = elapsed / rtBallFlightTime;
                 if (ratio > 1) ratio = 1;
-                let cX = rtBallStartX + (rtBallEndX - rtBallStartX) * ratio;
+
+
+let cX = rtBallStartX + (rtBallEndX - rtBallStartX) * ratio;
                 let cZ = rtBallStartZ + (rtBallEndZ - rtBallStartZ) * ratio;
-                speak(`${Math.round(cX)}, ${Math.round(cZ)}`);
+                let cY = (rtBallTrajectory === 'fly' || rtBallTrajectory === 'wall') ? Math.sin(ratio * Math.PI) * 15 : (rtBallTrajectory === 'line' ? Math.sin(ratio * Math.PI) * 2.5 : 0);
+                speak(`${Math.round(cX)}, ${Math.round(cZ)}, ${Math.round(cY)}`);
             }
+
+
         });
 
         function preloadAllPitches() {
