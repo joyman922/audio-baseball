@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.051</div>
+        <div class="version-text">2026-05-09 버전 1.052</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -947,23 +947,25 @@ let baseDest = coords[result.dir] || coords['cf'];
                     if (d < minDistToPath) { minDistToPath = d; closestInf = key; }
                 }
 
-                if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
-                    diveMsg = `${baseFielderNames[closestInf]} 몸을 날립니다! `;
+if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
+                    diveMsg = `${baseFielderNames[closestInf]} 몸을 날립니다!`;
                     let diveRoll = Math.random();
                     if (diveRoll < 0.40) { // 40% 포구 성공
                         result.type = (result.trajectory === 'line') ? 'flyout' : 'groundout';
                         result.isDeflected = false;
                         dest = { x: dest.x * (fielders[closestInf].z / dest.z), z: fielders[closestInf].z };
                         result.msgCatch = "잡았습니다!";
-                        diveMsg += "잡았습니다!";
                     } else if (diveRoll < 0.60) { // 20% 맞고 굴절
                         result.isDeflected = true;
                         dest = { x: dest.x * (fielders[closestInf].z / dest.z), z: fielders[closestInf].z };
-                        diveMsg += "글러브 맞고 굴절!";
+                        result.msgDeflect = "몸을 날렸으나 글러브 맞고 굴절!";
                     } else { // 40% 빠져나감
-                        diveMsg += "옆을 스쳐 외야로 빠져나갑니다!";
+                        // 외야로 빠져나가는 상황은 이어지는 외야수 포구 멘트에서 자연스럽게 처리됨
                     }
                 }
+
+
+
             }
 
             if (result.isDeflected) {
@@ -1081,20 +1083,21 @@ let baseDest = coords[result.dir] || coords['cf'];
                 playFielderSteps(fPos.x, fPos.z, dest.x, dest.z, actualRunTime, stepStartOffset);
             }
 
-            // [수정] 포수 뒤 파울 시 Z축 리스너 위치가 공을 따라 뒤(그물망 앞까지)로 빠지도록 완벽 추적
+// [수정] 포수 뒤 파울 시 Z축 리스너 위치가 공을 따라 뒤(그물망 앞까지)로 빠지도록 완벽 추적
             let targetListenerZ = dest.z > 0 ? dest.z + 5 : Math.min(15, dest.z + 15);
             audioCtx.listener.positionX.setValueAtTime(0, now);
             audioCtx.listener.positionY.setValueAtTime(0, now);
             audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
             audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + flightTime + chaseTime);
 
-            
-
+            // [복구] 날아갔던 타구/비행 소리 재생 함수 원상복구
+            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
 
             // 다이빙 멘트가 있다면 타구 비행 중간에 긴박하게 TTS 삽입
             if (diveMsg !== "") {
                 setTimeout(() => { speak(diveMsg); }, (flightTime * 0.4) * 1000);
             }
+
 
 
 
