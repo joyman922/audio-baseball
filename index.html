@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.065</div>
+        <div class="version-text">2026-05-09 버전 1.067</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -436,7 +436,7 @@ if (trajectory === 'fly') {
 // [수정] 포구음 다양성을 위해 glove 1~3번 모두 랜덤 사용 및 자연스러운 공간감 적용
 
 function playGloveCatchSound(x, z) {
-            stopLocationBeacon();
+            stopRestingSound();
             const panner = audioCtx.createPanner();
 
 
@@ -1061,15 +1061,18 @@ if (result.dir === 'p' || result.dir === 'c') {
                 scatterZ = isOutfield ? (Math.random() * 20 - 10) : (Math.random() * 6 - 3);
             }
 
-            let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
+let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
             let isFarDeflection = false;
             let diveMsg = "";
             let baseFielderNames = { 'p':'투수', 'c':'포수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수', 'lf':'좌익수', 'cf':'중견수', 'rf':'우익수' };
 
-            // [추가] 능동형 내야수 다이빙 AI (공이 내야를 통과할 때 X좌표 기준 양옆 5m 이내면 자동으로 몸을 날림)
+            let isNetting = (result.dir === 'foul_c' && dest.z > 10);
+            let hitsGroundEarly = ['past1b2b', 'past23between', 'past2b', 'line_l', 'line_r'].includes(result.dir) || result.dir.startsWith('texas_');
 
-// [통합] 메뉴 에러를 발생시켰던 괄호 꼬임 해결 및 점프 캐치 로직 적용
+            // [통합] 메뉴 에러를 발생시켰던 괄호 꼬임 해결 및 점프 캐치 로직 적용
             if (result.isJumpHit) {
+
+
                 let closestFielder = result.jumpFielder;
                 let fZ = fielders[closestFielder].z;
                 let fX = dest.x * (fZ / dest.z); 
@@ -1320,12 +1323,17 @@ let chaseTime = 0;
             audioCtx.listener.positionX.setValueAtTime(0, now);
             audioCtx.listener.positionY.setValueAtTime(0, now);
             audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
-            audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + flightTime + chaseTime);
 
-playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
+
+audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + flightTime + chaseTime);
+
+            let actualRollTime = (result.trajectory === 'wall' || result.type.includes('flyout') || result.type === 'hr') ? 0 : chaseTime;
+            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, actualRollTime, result.vel, result.trajectory, false);
 
 
             if (diveMsg !== "") {
+
+
                 // [수정] 다이빙 멘트를 공 도착 정확히 0.6초 전으로 당겨 다이빙 직후 바로 결과가 나오도록 수정
                 let diveMsgTime = Math.max(0, flightTime - 0.6);
                 setTimeout(() => { speak(diveMsg); }, diveMsgTime * 1000);
@@ -1395,12 +1403,14 @@ if (result.type === 'hr') {
                 playBounceSound(dest.x, dest.z, 0); 
                 speak(result.msgCatch); 
                 stopStepNodes();
-            } else if (result.trajectory === 'wall') {
+
+
+} else if (result.trajectory === 'wall') {
                 await sleep(flightTime * 1000); 
                 playFenceSound(dest.x, dest.z);
                 speak("펜스 때립니다!");
                 if (chaseTime > 0) {
-                    playLocationBeacon(dest.x, dest.z);
+                    playRestingSound(dest.x, dest.z);
                     await sleep(chaseTime * 1000);
                 }
                 playGloveCatchSound(dest.x, dest.z);
@@ -1460,7 +1470,7 @@ if (result.type === 'hr') {
                 }
                 
                 if (chaseTime > 0) {
-                    playLocationBeacon(dest.x, dest.z);
+                    playRestingSound(dest.x, dest.z);
                     let waitTime = isHitFence ? Math.max(0, chaseTime - 0.5) : chaseTime;
                     await sleep(waitTime * 1000);
                 }
@@ -1477,12 +1487,24 @@ if (result.type === 'hr') {
 
                 await sleep(flightTime * 1000);
                 if (chaseTime > 0) {
-                    playLocationBeacon(dest.x, dest.z);
+                    playRestingSound(dest.x, dest.z);
                     await sleep(chaseTime * 1000);
                 }
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
             } else {
+
+
+
+
+
+
+
+
+
+
+
+
                 await sleep(timeToCatch * 1000);
                 if (result.type !== 'foul_drop') playGloveCatchSound(dest.x, dest.z); 
                 
