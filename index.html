@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.046</div>
+        <div class="version-text">2026-05-08 버전 1.047</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -681,20 +681,23 @@ const hitOF = (type, dir, vel, msgInit, msgCatch, trajectory = 'line', isDivingM
                 inPlay: true, type: 'foul_drop', dir, vel, msgInit, msgCatch, trajectory: 'fly'
             });
 
-            // 내야 타구 생성
+// 내야 타구 생성
             const hardHitInfield = (vel) => {
                 let rand = Math.random();
-                let dir = (rand < 0.5) ? 'ss' : '1b';
-                let infielder = (dir === 'ss') ? '유격수' : '1루수';
-                let dirName = (dir === 'ss') ? "2,3루간" : "1,2루간";
+                // 1, 2, 3루 및 유격수 25% 균등 분배
+                let dir = (rand < 0.25) ? '1b' : (rand < 0.5 ? '2b' : (rand < 0.75 ? '3b' : 'ss'));
+                let infielder = (dir === '1b') ? '1루수' : (dir === '2b' ? '2루수' : (dir === '3b' ? '3루수' : '유격수'));
+                let dirName = (dir === '1b' || dir === '2b') ? "1,2루간" : "2,3루간";
                 
                 if (rand < 0.3) return outCatch(dir, vel, `${dirName} 강한 타구!`, `${infielder} 직선타 아웃!`, 'line');
-                // [수정] 굴절된 타구의 내야 안타 확률을 40%에서 10%로 대폭 축소하여 현실성 부여
                 if (rand < 0.6) return grounder(dir, vel, `${dirName} 강습 타구!`, `${infielder} 맞고 굴절!`, Math.random() < 0.1, true);
                 
-                let pierceDir = (dir === 'ss') ? 'past23between' : 'past1b2b';
+                let pierceDir = (dir === 'ss' || dir === '3b') ? 'past23between' : 'past1b2b';
                 return hitOF('single', pierceDir, vel, `${dirName} 완전히 빠져나가는 타구!`, ``, 'line');
             };
+
+
+
 
             const pitcherAmbiguousHit = (vel) => {
                 let rand = Math.random();
@@ -899,22 +902,25 @@ let baseDest = coords[result.dir] || coords['cf'];
 
 
 
-            let isFarDeflection = false;
+let isFarDeflection = false;
 
             if (result.isDivingMiss) {
-                dest.z -= 30; // 다이빙 실패 시 뒤로 길게 빠짐
+                dest.z -= 30; 
             } else if (result.isDeflected) {
-                // [수정] 80% 확률 근거리 굴절, 20% 확률로 장거리 외야 굴절 분리
                 if (Math.random() < 0.2) {
                     isFarDeflection = true;
+                    // [수정] 장거리 굴절 시 외야수 위치(-100m)에 가깝게 최대 60m까지 무지막지하게 빠지도록 설정
                     dest.x += (Math.random() * 30) - 15; 
-                    dest.z -= (Math.random() * 15 + 15); // -15m ~ -30m (외야 쪽으로 깊게 빠짐)
+                    dest.z -= (Math.random() * 10 + 50); 
                 } else {
-                    dest.x += (Math.random() * 16) - 8; // 좌우 8m 이내 튀기기
-                    // 타자 쪽(앞)으로 튀는 경우(+Z)와 뒤로 빠지는 경우(-Z) 모두 포함 (앞 10m ~ 뒤 6m)
-                    dest.z += (Math.random() * 16) - 6;  
+                    dest.x += (Math.random() * 16) - 8; // X축(좌우) 랜덤성 8m
+                    // [수정] 내야 굴절 시 뒤로 최대 8m 제한, 앞으로 최대 10m 튀도록 교정
+                    dest.z += (Math.random() * 18) - 8;  
                 }
             }
+
+
+
 
             let primaryFielder = 'cf';
             if (['3b', 'foul_3b', '3b_deep'].includes(result.dir)) primaryFielder = '3b';
@@ -1014,19 +1020,19 @@ let baseDest = coords[result.dir] || coords['cf'];
             audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
             audioCtx.listener.positionZ.linearRampToValueAtTime(Math.min(15, dest.z + 15), now + flightTime + chaseTime);
 
-            playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
+playBallFlightSound(0, 0, dest.x, dest.z, flightTime, chaseTime, result.vel, result.trajectory, false);
             
-if (result.trajectory === 'ground' || result.isDivingMiss) {
+            // [수정] 굴절 바운스 소리가 씹히는 현상을 막기 위해 isDeflected를 조건문 최상단으로 끌어올림
+            if (result.isDeflected) {
+                playBounceSound(baseDest.x + scatterX, baseDest.z + scatterZ, flightTime);
+                playBounceSound(dest.x, dest.z, flightTime + 0.3);
+            } else if (result.trajectory === 'ground' || result.isDivingMiss) {
                 playBounceSound(dest.x * 0.3, dest.z * 0.3, 0.15);
                 if (flightTime + chaseTime > 0.6) playBounceSound(dest.x * 0.6, dest.z * 0.6, 0.4);
             } else if (result.trajectory === 'wall') {
                 playBounceSound(dest.x, dest.z, flightTime + 0.3);
             } else if (['single', 'extra', 'foul_drop'].includes(result.type)) {
                 playBounceSound(dest.x, dest.z, flightTime);
-            } else if (result.isDeflected) {
-                // [수정] 굴절 타구 바운스 위치 완벽 교정 (수비수에 맞은 1차 위치, 굴절되어 굴러간 2차 위치)
-                playBounceSound(baseDest.x + scatterX, baseDest.z + scatterZ, flightTime);
-                playBounceSound(dest.x, dest.z, flightTime + 0.3);
             }
 
 
@@ -1047,11 +1053,12 @@ if (result.trajectory === 'wall') {
                 if (chaseTime > 0) await sleep(chaseTime * 1000);
                 playGloveCatchSound(dest.x, dest.z);
                 speak(`${caughtByName} 잡았습니다.`);
-            } else if (result.isDeflected || result.isDivingMiss) {
+
+
+} else if (result.isDeflected || result.isDivingMiss) {
                 await sleep(flightTime * 1000); 
                 
                 let deflectMsg = result.msgCatch || result.msgDeflect;
-                // [수정] 강습 타구가 크게 튀어 외야 방향(Z좌표 -55 이상 깊게)으로 빠지는 경우 상황 멘트 추가
                 if (result.isDeflected && isFarDeflection && dest.z < -55) {
                     deflectMsg += " 공이 외야로 빠져나갑니다!";
                 }
@@ -1060,13 +1067,15 @@ if (result.trajectory === 'wall') {
                 if (chaseTime > 0) await sleep(chaseTime * 1000); 
                 playGloveCatchSound(dest.x, dest.z);
                 
-                // 외야수가 커버하는 상황과 내야수가 커버하는 상황을 분리하여 자연스럽게 출력
+                // [수정] 어색한 '백업 들어와' 멘트 삭제, 수비수 이름 + 잡았습니다 로 심플하고 긴박하게 출력
                 if (['lf', 'cf', 'rf'].includes(activeFielderKey) && isFarDeflection) {
-                    speak(`외야까지 굴러간 공, ${caughtByName}가 커버합니다.`);
+                    speak(`외야까지 굴러간 공, ${caughtByName} 잡았습니다.`);
                 } else {
-                    speak(`${caughtByName} 백업 들어와 공 잡았습니다.`);
+                    speak(`${caughtByName} 잡았습니다.`);
                 }
             } else if (['single', 'extra'].includes(result.type)) {
+
+
 
 
 
