@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.069</div>
+        <div class="version-text">2026-05-09 버전 1.070</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -413,11 +413,14 @@ if (trajectory === 'fly') {
             panner.rolloffFactor = 0.05; // 거리가 멀어져도 절대 소리가 소멸되지 않음
 
             panner.positionX.setValueAtTime(startX, now);
-            panner.positionX.linearRampToValueAtTime(endX, now + totalMoveTime);
-            
-            panner.positionY.value = 0; 
-            
+
+
+panner.positionX.linearRampToValueAtTime(endX, now + totalMoveTime);
+            if (trajectory === 'fly' || trajectory === 'wall') panner.positionY.setValueCurveAtTime(new Float32Array([1.0, 15.0, 2.0]), now, totalMoveTime);
+            else if (trajectory === 'line') panner.positionY.setValueCurveAtTime(new Float32Array([1.0, 2.5, 0.5]), now, totalMoveTime);
+            else panner.positionY.value = 0;
             panner.positionZ.setValueAtTime(startZ, now);
+
             panner.positionZ.linearRampToValueAtTime(endZ, now + totalMoveTime);
 
             src.connect(filter); filter.connect(gain); gain.connect(panner); panner.connect(audioCtx.destination);
@@ -755,8 +758,10 @@ const hardHitInfield = (vel) => {
 
 const jumpHitInfield = (vel) => {
                 let rand = Math.random();
-                // 외야수 제외, 내야수만 점프 캐치
-                let fKeys = ['p', '1b', '2b', '3b', 'ss'];
+                // Y축 및 도착 시간 정상화로 모든 수비수 롤백
+                let fKeys = ['p', '1b', '2b', '3b', 'ss', 'lf', 'cf', 'rf'];
+
+
 
                 let fKey = fKeys[Math.floor(rand * fKeys.length)];
                 let fName = { 'p':'투수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수', 'lf':'좌익수', 'cf':'중견수', 'rf':'우익수' }[fKey];
@@ -1087,15 +1092,20 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
                     result.type = 'flyout'; result.isDivingCatch = true; result.diver = closestFielder;
                     dest = { x: fX, z: fZ };
                     result.msgCatch = `${baseFielderNames[closestFielder]} 점프 캐치! 잡았습니다!`;
-                } else if (jumpRoll < 0.70) { 
+
+
+} else if (jumpRoll < 0.70) { 
                     result.isDeflected = true; result.isDivingMiss = true; result.diver = closestFielder;
-                    dest = { x: fX + (Math.random()*12 - 6), z: fZ + (Math.random()*6 + 2) }; // 앞쪽으로 굴절 (Z축 양수 방향)
-                    result.msgDeflect = `${baseFielderNames[closestFielder]} 점프했으나 글러브 맞고 앞으로 굴절!`;
+                    dest = { x: fX + (Math.random()*12 - 6), z: fZ + (Math.random()*4 + 6) }; // 앞으로 6~10m
+                    result.msgDeflect = `${baseFielderNames[closestFielder]} 점프했으나 맞고 앞으로 떨어집니다!`;
                     result.type = 'single';
                 } else if (jumpRoll < 0.90) { 
                     result.isDeflected = true; result.isDivingMiss = true; result.diver = closestFielder;
-                    dest = { x: fX + (Math.random()*12 - 6), z: fZ - (Math.random()*20 + 40) }; // 뒤로 40~60m 빠짐
-                    result.msgDeflect = `${baseFielderNames[closestFielder]} 점프했으나 글러브 맞고 뒤로 빠집니다!`;
+                    dest = { x: fX + (Math.random()*12 - 6), z: fZ - (Math.random()*20 + 20) }; // 뒤로 20~40m
+                    result.msgDeflect = `${baseFielderNames[closestFielder]} 점프했으나 맞고 완전히 뒤로 빠집니다!`;
+
+
+
                     result.type = (dest.z < -90) ? 'extra' : 'single';
                 } else { 
                     result.isDivingMiss = true; result.diver = closestFielder;
@@ -1140,16 +1150,18 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
                 }
             }
 
-            if (result.isDeflected && !result.isJumpHit) {
+if (result.isDeflected && !result.isJumpHit) {
                 if (Math.random() < 0.2) {
                     isFarDeflection = true;
                     dest.x += (Math.random() * 30) - 15; 
-                    dest.z -= (Math.random() * 20 + 60); 
+                    dest.z -= (Math.random() * 20 + 20); // 완전히 뒤로 빠짐 (-20~-40)
                     result.type = 'extra'; 
                 } else {
                     dest.x += (Math.random() * 16) - 8; 
-                    dest.z += (Math.random() * 18) - 8;  
+                    dest.z += Math.random() < 0.5 ? (Math.random() * 4 + 6) : -(Math.random() * 5 + 10);
                 }
+
+
             }
 
             let fenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
@@ -1197,14 +1209,13 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
             let speedMs = result.vel * 0.44704; 
             let flightTime = distToDest / speedMs;
             
-            if (result.trajectory === 'fly') {
-                if (!isOutfield && !['wall_c', 'wall_l', 'wall_r'].includes(result.dir)) {
-                    flightTime = Math.random() * 1.5 + 2.5; 
-                } else {
-                    flightTime *= 1.0; 
-                }
+if (result.trajectory === 'fly') {
+                flightTime *= 1.35; // 1배속 기준 포물선 체공시간 비례 연장
             }
-            if (result.trajectory === 'wall') flightTime *= 1.0; 
+            if (result.trajectory === 'wall') flightTime *= 1.15;
+
+
+
             if (flightTime < 0.2) flightTime = 0.2;
             if (flightTime > 5.0) flightTime = 5.0;
 
@@ -1343,13 +1354,12 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, actualRollTime, result.vel, result.trajectory, false);
 
 
-            if (diveMsg !== "") {
-
-
-                // [수정] 다이빙 멘트를 공 도착 정확히 0.6초 전으로 당겨 다이빙 직후 바로 결과가 나오도록 수정
-                let diveMsgTime = Math.max(0, flightTime - 0.6);
+if (diveMsg !== "") {
+                let passT = result.diver ? flightTime * (Math.abs(fielders[result.diver].z) / Math.max(0.1, Math.abs(dest.z))) : flightTime;
+                let diveMsgTime = Math.max(0, Math.min(passT, flightTime) - 0.3);
                 setTimeout(() => { speak(diveMsg); }, diveMsgTime * 1000);
             }
+
 
 if (result.type === 'foul_drop') {
                 setTimeout(() => { 
