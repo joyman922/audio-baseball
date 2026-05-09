@@ -28,7 +28,7 @@
         <h1>오디오 베이스볼</h1>
         <button id="btnGoSinglePlayer">1. 개인 플레이</button>
         <button id="btnGoHelp">2. 도움말</button>
-        <div class="version-text">2026-05-08 버전 1.048</div>
+        <div class="version-text">2026-05-08 버전 1.049</div>
     </div>
 
     <div id="singlePlayerScreen" class="screen">
@@ -848,36 +848,36 @@ if (r < 75) return hitOF('extra', 'line_r', getVel(85, 100), "1루 선상 뻗어
             const now = audioCtx.currentTime;
 
 
-// [수정] 야구장의 실제 규격과 부채꼴 모양을 반영하여 파울 라인을 넓히고 수비수들의 위치를 현실적으로 전면 개편
+// [수정] 대표님 지시대로 내야 간격 축소 및 외야/펜스 거리 대폭 확장 개편
             const coords = {
                 'c':  { x: 0, z: 0 }, 'p':  { x: 0, z: -18 },
-                '3b': { x: -18, z: -30 }, 'ss': { x: -12, z: -45 },     
-                '2b': { x: 12, z: -45 }, '1b': { x: 18, z: -30 },         
-                'lf': { x: -45, z: -85 }, 'cf': { x: 0, z: -95 },      
-                'rf': { x: 45, z: -85 }, '1b2b': { x: 22, z: -40 }, 
-                '23between': { x: -22, z: -40 }, 'past2b': { x: 0, z: -70 }, 
-                'texas_l': { x: -30, z: -65 }, 'texas_r': { x: 30, z: -65 },  
-                'texas_c': { x: 0, z: -65 }, 
-                'line_l': { x: -60, z: -65 }, 'line_r': { x: 60, z: -65 },  
-                'wall_l': { x: -75, z: -105 }, 'wall_c': { x: 0, z: -122 },   
-                'wall_r': { x: 75, z: -105 }, 'wall_lc': { x: -35, z: -115 }, 
-                'wall_rc': { x: 35, z: -115 }, 'wall_l_deep': { x: -60, z: -110 }, 
-                'wall_r_deep': { x: 60, z: -110 }, 'foul_c': { x: 0, z: 15 },
+                '3b': { x: -18, z: -30 }, 'ss': { x: -6, z: -45 },     
+                '2b': { x: 6, z: -45 }, '1b': { x: 18, z: -30 },         
+                'lf': { x: -45, z: -120 }, 'cf': { x: 0, z: -130 },      
+                'rf': { x: 45, z: -120 }, '1b2b': { x: 12, z: -40 }, 
+                '23between': { x: -12, z: -40 }, 'past2b': { x: 0, z: -85 }, 
+                'texas_l': { x: -30, z: -90 }, 'texas_r': { x: 30, z: -90 },  
+                'texas_c': { x: 0, z: -95 }, 
+                'line_l': { x: -65, z: -90 }, 'line_r': { x: 65, z: -90 },  
+                'wall_l': { x: -75, z: -150 }, 'wall_c': { x: 0, z: -160 },   
+                'wall_r': { x: 75, z: -150 }, 'wall_lc': { x: -35, z: -155 }, 
+                'wall_rc': { x: 35, z: -155 }, 'wall_l_deep': { x: -60, z: -150 }, 
+                'wall_r_deep': { x: 60, z: -150 }, 'foul_c': { x: 0, z: 15 },
                 'foul_1b': { x: 40, z: -15 }, 'foul_3b': { x: -40, z: -15 },
-                'foul_lf': { x: -70, z: -70 }, 'foul_rf': { x: 70, z: -70 },
-                'p3b': { x: -10, z: -20 }, 'ss_deep': { x: -25, z: -55 }, 
-                '3b_deep': { x: -25, z: -40 }, '2b_deep': { x: 25, z: -55 }, 
-                'p1b': { x: 10, z: -20 }, 'lc_deep': { x: -30, z: -110 },
-                'rc_deep': { x: 30, z: -110 },
-                'past1b2b': { x: 28, z: -70 }, 'past23between': { x: -28, z: -70 }
+                'foul_lf': { x: -70, z: -90 }, 'foul_rf': { x: 70, z: -90 },
+                'p3b': { x: -10, z: -20 }, 'ss_deep': { x: -15, z: -60 }, 
+                '3b_deep': { x: -25, z: -45 }, '2b_deep': { x: 15, z: -60 }, 
+                'p1b': { x: 10, z: -20 }, 'lc_deep': { x: -30, z: -140 },
+                'rc_deep': { x: 30, z: -140 },
+                'past1b2b': { x: 28, z: -90 }, 'past23between': { x: -28, z: -90 }
             };
 
             const fielders = {
                 'p': {x: 0, z: -18}, 'c': {x: 0, z: 0}, 
-                '1b': {x: 18, z: -30}, '2b': {x: 12, z: -45},
-                '3b': {x: -18, z: -30}, 'ss': {x: -12, z: -45}, 
-                // [수정] 외야수 시작 지점을 앞당겨서 타구 발생 시 훨씬 오랫동안 전력질주하도록 유도
-                'lf': {x: -45, z: -85}, 'cf': {x: 0, z: -95}, 'rf': {x: 45, z: -85}
+                '1b': {x: 18, z: -30}, '2b': {x: 6, z: -45},
+                '3b': {x: -18, z: -30}, 'ss': {x: -6, z: -45}, 
+                // [수정] 외야수 시작 위치를 담장 앞쪽으로 깊게 배치하여 수비 범위 현실화
+                'lf': {x: -45, z: -120}, 'cf': {x: 0, z: -130}, 'rf': {x: 45, z: -120}
             };
 
 
