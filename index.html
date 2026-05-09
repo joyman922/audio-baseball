@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.068</div>
+        <div class="version-text">2026-05-09 버전 1.069</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -753,10 +753,11 @@ const hardHitInfield = (vel) => {
                 return hitOF('single', pierceDir, vel, `${dirName} 날카로운 타구!`, ``, 'line');
             };
 
-            const jumpHitInfield = (vel) => {
+const jumpHitInfield = (vel) => {
                 let rand = Math.random();
-                // 외야수 포함 모든 수비수 중 랜덤 선택
-                let fKeys = ['p', '1b', '2b', '3b', 'ss', 'lf', 'cf', 'rf'];
+                // 외야수 제외, 내야수만 점프 캐치
+                let fKeys = ['p', '1b', '2b', '3b', 'ss'];
+
                 let fKey = fKeys[Math.floor(rand * fKeys.length)];
                 let fName = { 'p':'투수', '1b':'1루수', '2b':'2루수', '3b':'3루수', 'ss':'유격수', 'lf':'좌익수', 'cf':'중견수', 'rf':'우익수' }[fKey];
                 
@@ -858,8 +859,11 @@ if (timeDiff <= 40) {
 } else if (timeDiff <= 55) { 
                     if (r < 40) return hitOF('single', 'past2b', getVel(80, 95), "2루 베이스 스치는 타구!", "", 'line');
                     if (r < 60) return jumpHitInfield(getVel(75, 90)); 
-                    return grounder('ss_deep', getVel(70, 90), "유격수 깊은 땅볼!", "", Math.random() < 0.1);
+                    let gDir = ['1b','2b','3b','ss','p'][Math.floor(Math.random()*5)];
+                    let gName = {'1b':'1루수','2b':'2루수','3b':'3루수','ss':'유격수','p':'투수'}[gDir];
+                    return grounder(gDir, getVel(70, 90), `${gName} 쪽 땅볼!`, "", Math.random() < 0.1);
                 } else if (timeDiff <= 70) {
+
 
 
 
@@ -991,7 +995,8 @@ function stopStepNodes() {
                 'wall_r': { x: 75, z: -150 }, 'wall_lc': { x: -35, z: -155 }, 
                 'wall_rc': { x: 35, z: -155 }, 'wall_l_deep': { x: -60, z: -150 }, 
                 'wall_r_deep': { x: 60, z: -150 }, 
-                'foul_c': { x: 0, z: 0 }, 'foul_1b': { x: 50, z: -15 }, 'foul_3b': { x: -50, z: -15 },
+
+'foul_c': { x: 0, z: 0 }, 'foul_1b': { x: 30, z: -30 }, 'foul_3b': { x: -30, z: -30 },
 
 
 'foul_lf': { x: -80, z: -90 }, 'foul_rf': { x: 80, z: -90 },
@@ -1301,10 +1306,15 @@ let chaseTime = 0;
 
 
 
-                if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
+if (result.isDivingCatch) {
+                    chaseTime = 0; fielderRunTime = flightTime; actualRunTime = 0;
+                } else if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
                     chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
                     fielderRunTime = flightTime + chaseTime; 
                 } else if (['groundout', 'flyout', 'foul_flyout'].includes(result.type)) {
+
+
+
                     chaseTime = Math.max(0.0, fielderRunTime - flightTime);
                     fielderRunTime = flightTime + chaseTime;
                 }
@@ -1341,10 +1351,12 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
                 setTimeout(() => { speak(diveMsg); }, diveMsgTime * 1000);
             }
 
-            if (result.type === 'foul_drop') {
+if (result.type === 'foul_drop') {
                 setTimeout(() => { 
                     speak("파울!"); 
-                    stopStepNodes();
+                    stopStepNodes(); handleHitFadeOut();
+
+
                 }, flightTime * 1000);
             }
 
@@ -1352,8 +1364,13 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
 
 
 if (result.isDeflected) {
-                playBounceSound(dest.x, dest.z, flightTime + 0.2);
+                if (audioBuffers["glove3"]) {
+                    const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=dest.x; p.positionZ.value=dest.z;
+                    const s = audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start(audioCtx.currentTime+flightTime);
+                }
+                playBounceSound(dest.x, dest.z, flightTime + 0.3);
             } else if (result.trajectory === 'ground') {
+
 
 
 
