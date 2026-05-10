@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.083</div>
+        <div class="version-text">2026-05-10 버전 1.084</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1020,8 +1020,9 @@ if (result.type.includes('foul')) {
                 if (result.type === 'hr') dest.z = fenceLimit(dest.x) - (Math.random() * 10 + 5);
 
 
+//내야 땅볼 범위
 } else if (result.trajectory === 'ground') {
-                dest.z = -(Math.random() * 50); dest.x = (Math.random() * 2 - 1) * (Math.abs(dest.z) + 3);
+                dest.z = -(Math.random() * 45); dest.x = (Math.random() * 2 - 1) * (Math.abs(dest.z) + 3);
             } else if (result.type === 'single') {
 
 
@@ -1089,11 +1090,14 @@ let activeDef = null;
 let maxDx = isInf ? 5.0 : 6.0;
 
                     if (dx <= maxDx && !(result.trajectory === 'fly' && dest.z >= -60)) {
-                        // 1. 다이렉트 캐치 (주변 1m 이내, 높이 2m 이하)
 
-                        if (dx <= 1.0 && crossY <= 2.0) {
-                            activeDef = { type: 'direct', fielder: key, x: crossX, z: crossZ, isInf: isInf }; break;
+// 1. 다이렉트 캐치 (주변 1m 이내, 높이 0.0~2.0m)
+
+                        if (dx <= 1.0 && crossY >= 0.0 && crossY <= 2.0) {
+                            activeDef = { type: 'direct', fielder: key, x: crossX, z: crossZ, isInf: isInf, catchY: crossY }; break;
                         }
+
+
                         // 2. 점프 캐치 (내야 2.1~2.5, 외야 2.1~3.5)
                         let maxY = isInf ? 2.5 : 3.5;
                         if (crossY >= 2.1 && crossY <= maxY) {
@@ -1112,9 +1116,11 @@ let maxDx = isInf ? 5.0 : 6.0;
 
 let fX = activeDef.x; let fZ = activeDef.z; let cF = activeDef.fielder; let roll = Math.random();
                 if (activeDef.type === 'direct') {
-                    result.type = 'flyout'; result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ };
-                    result.msgCatch = `${baseFielderNames[cF]} 제자리에서 훌쩍 뛰어 그대로 잡아냅니다!`; diveMsg = " "; // 오디오 스케줄러 진입을 위한 공백 유지
+                    let isGrnd = activeDef.catchY < 0.1; result.type = isGrnd ? 'groundout' : 'flyout';
+                    result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ };
+                    result.msgCatch = isGrnd ? `${baseFielderNames[cF]} 안전하게 바운드처리합니다.` : `${baseFielderNames[cF]} 제자리에서 잡습니다!`; diveMsg = " ";
                 } else if (activeDef.type === 'jump') {
+
 
 
                     diveMsg = `${baseFielderNames[cF]} 점프합니다!`;
@@ -1219,8 +1225,9 @@ if (result.trajectory === 'fly' && dest.z >= -60) {
             let actualRunTime = distToBall / fielderSpeed; 
             let stepStartOffset = 0;
 
+//-외야수 정지 시간
 if ((result.trajectory === 'fly' || result.trajectory === 'line') && !result.isDeflected && !result.isDivingCatch && !result.isDivingMiss && !result.isJumpHit) {
-                let maxRunDist = fielderSpeed * (isOutfield ? Math.max(0, flightTime - 1.0) : flightTime);
+                let maxRunDist = fielderSpeed * (isOutfield ? Math.max(0, flightTime - 1.5) : flightTime);
 
           
       
@@ -1335,16 +1342,21 @@ let passT = flightTime;
 
 if (diveMsg !== "") {
                 passT = result.diver ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
-                if (diveMsg.trim() !== "") setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
+
+
+if (diveMsg.trim() !== "") setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
                 setTimeout(() => { 
-                    if (result.isDivingCatch) { playGloveCatchSound(dest.x, dest.z); playUmpireSound('out', dest.x, dest.z); if(result.msgCatch) speak(result.msgCatch); }
+                    if (result.isDivingCatch) { playGloveCatchSound(dest.x, dest.z); if (result.type === 'flyout') playUmpireSound('out', dest.x, dest.z); if(result.msgCatch) speak(result.msgCatch); }
+                    else { if (result.isDeflected && audioBuffers["glove3"]) {
 
 
-else { if (result.isDeflected && audioBuffers["glove3"]) {
-                               const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=dest.x; p.positionZ.value=dest.z; p.positionY.value=0;
+                               let cX = result.diver ? fielders[result.diver].x : dest.x; let cZ = result.diver ? fielders[result.diver].z : dest.z;
+                               const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.distanceModel='linear'; p.refDistance=1; p.maxDistance=1000; p.rolloffFactor=0.05; p.channelCount=1; p.channelCountMode="explicit";
+                               p.positionX.value=cX; p.positionZ.value=cZ; p.positionY.value=0;
                                let s=audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start();
                            } let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }
                 }, passT * 1000);
+
 
 
 
@@ -1434,16 +1446,18 @@ let initDir = dest.x > 15 ? "우측" : (dest.x < -15 ? "좌측" : "중앙");
 
 
 let pT = flightTime * (45 / Math.abs(dest.z)); let oT = flightTime * (100 / Math.abs(dest.z));
+if (pT >= flightTime) pT = Math.max(0, flightTime - 0.2);
 
-
-if (dest.z <= -45) setTimeout(() => { if (isInPlay) {
+if (dest.z <= -45) setTimeout(() => { if (isInPlay && audioCtx.currentTime - rtBallStartTime < flightTime - 0.15) {
                 if (result.trajectory === 'fly') { if (dest.z < -60 && Math.random() < 0.5) speak("외야 쪽으로 뻗어갑니다."); }
                 else { 
                     let crossX = dest.x * (-35 / dest.z); // 내야 통과 시점의 궤적 역산
                     let p = crossX > 20 ? "1루수 옆" : (crossX > 8 ? "1,2루간" : (crossX > -8 ? "센터 쪽" : (crossX > -20 ? "3유간" : "3루수 옆"))); 
-                    speak(`${p}!`); if (dest.z <= -60) setTimeout(() => speak("외야로 빠져나갑니다!"), 600);
+                    speak(`${p}!`); if (dest.z <= -60 && !['flyout', 'groundout'].includes(result.type)) setTimeout(() => { if(isInPlay) speak("외야로 빠져나갑니다!"); }, 600);
                 }
             } }, pT * 1000);
+
+
 
 
 
@@ -1613,10 +1627,12 @@ if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes(
                 // [추가] 야구의 완전 능동적 주루 판단 시스템 (송구 직전 물리적 시간에 따른 주자 위치 계산)
                 let timeToThrow = timeToCatch + fieldingTime;
                 
-                let runnerTime1B = 27.43 / 7.0 + 0.4; 
-                let runnerTime2B = (27.43 * 2) / 7.0 + 0.4; 
-                let runnerTime3B = (27.43 * 3) / 7.0 + 0.4; 
-                let runnerTimeHome = (27.43 * 4) / 7.0 + 0.4;
+
+//주자 진루 속도
+                let runnerTime1B = 27.43 / 7.5 + 0.4; 
+                let runnerTime2B = (27.43 * 2) / 7.5 + 0.4; 
+                let runnerTime3B = (27.43 * 3) / 7.5 + 0.4; 
+                let runnerTimeHome = (27.43 * 4) / 7.5 + 0.4;
 
                 let targetBase = '1b'; 
                 let targetRunnerTime = runnerTime1B;
