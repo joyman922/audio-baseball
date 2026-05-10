@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.072</div>
+        <div class="version-text">2026-05-09 버전 1.073</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -420,10 +420,12 @@ if (trajectory === 'fly') {
 
 
 panner.positionX.linearRampToValueAtTime(endX, now + totalMoveTime);
-            if (trajectory === 'fly' || trajectory === 'wall') panner.positionY.setValueCurveAtTime(new Float32Array([1.0, 15.0, 2.0]), now, totalMoveTime);
+            if (trajectory === 'fly') panner.positionY.setValueCurveAtTime(new Float32Array([1.0, 25.0, 2.0]), now, totalMoveTime);
+            else if (trajectory === 'wall') panner.positionY.setValueCurveAtTime(new Float32Array([1.0, 8.0, 2.0]), now, totalMoveTime);
             else if (trajectory === 'line') panner.positionY.setValueCurveAtTime(new Float32Array([1.0, 2.5, 0.5]), now, totalMoveTime);
             else panner.positionY.value = 0;
             panner.positionZ.setValueAtTime(startZ, now);
+
 
             panner.positionZ.linearRampToValueAtTime(endZ, now + totalMoveTime);
 
@@ -1100,13 +1102,15 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
 
             let isNetting = (result.dir === 'foul_c' && dest.z > 10);
             let hitsGroundEarly = ['past1b2b', 'past23between', 'past2b', 'line_l', 'line_r'].includes(result.dir) || result.dir.startsWith('texas_');
+//점프 적용
 
-            // [통합] 메뉴 에러를 발생시켰던 괄호 꼬임 해결 및 점프 캐치 로직 적용
-            if (result.isJumpHit) {
-
-
+if (result.isJumpHit) {
                 let closestFielder = result.jumpFielder;
                 let fZ = fielders[closestFielder].z;
+                diveMsg = `${baseFielderNames[closestFielder]} 점프합니다!`;
+
+
+
                 let fX = dest.x * (fZ / dest.z); 
                 
                 let jumpRoll = Math.random();
@@ -1150,9 +1154,10 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
                         if (d < minDistToPath) { minDistToPath = d; closestInf = key; }
                     }
 
-                    if (closestInf && minDistToPath <= 5.0 && minDistToPath > 1.5) {
+if (closestInf && minDistToPath <= 5.0 && !hitsGroundEarly) {
                         diveMsg = `${baseFielderNames[closestInf]} 몸을 날립니다!`;
                         let diveRoll = Math.random();
+
 
                         if (diveRoll < 0.40) {
                             result.type = hitsGroundEarly ? 'single' : 'flyout';
@@ -1394,10 +1399,10 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, actualRollTime, result.vel, result.trajectory, false);
 
 
-if (diveMsg !== "") {
-                let passT = result.diver ? flightTime * (Math.abs(fielders[result.diver].z) / Math.max(0.1, Math.abs(dest.z))) : flightTime;
-                let diveMsgTime = Math.max(0, Math.min(passT, flightTime) - 0.2);
-                setTimeout(() => { speak(diveMsg); }, diveMsgTime * 1000);
+let passT = flightTime;
+            if (diveMsg !== "") {
+                passT = result.diver ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
+                setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
                 if (result.isDivingMiss || result.isDeflected) {
                     setTimeout(() => { let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }, passT * 1000);
                     result.msgDeflect = ""; result.msgCatch = ""; 
@@ -1420,11 +1425,13 @@ if (result.type === 'foul_drop') {
 
 if (result.isDeflected) {
                 if (audioBuffers["glove3"]) {
-                    let passT = result.diver ? flightTime * (Math.abs(fielders[result.diver].z) / Math.max(0.1, Math.abs(dest.z))) : flightTime;
+                    let gT = result.diver ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
                     const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=result.diver?fielders[result.diver].x:dest.x; p.positionZ.value=result.diver?fielders[result.diver].z:dest.z;
-                    const s = audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start(audioCtx.currentTime+passT);
+                    const s = audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start(audioCtx.currentTime+gT);
                 }
             } else if (result.trajectory === 'ground') {
+
+
 
 
 
@@ -1467,9 +1474,13 @@ if (result.isDeflected) {
 
 
 
-let dirText = dest.x < -15 ? "좌측" : (dest.x > 15 ? "우측" : "중앙");
-            let trajText = result.trajectory === 'ground' ? "내야 땅볼!" : (result.trajectory === 'fly' ? "뜬공!" : (result.vel >= 90 ? "강한 타구!" : "타구!"));
-            speak(`타구 속도 ${result.vel}마일! ${dirText} 방향 ${trajText}`);
+let dirText = dest.x < -12 ? "좌측" : (dest.x > 12 ? "우측" : "중앙");
+            let isInfH = dest.z >= -60; let isC = result.dir === 'c' || result.dir === 'foul_c';
+            let tText = result.trajectory === 'ground' ? (isInfH ? (isC ? "포수 앞 땅볼!" : "내야 땅볼!") : `${dirText} 방향 땅볼!`) : (result.trajectory === 'line' ? `${dirText} 방향 라인드라이브!` : (result.trajectory === 'fly' ? (isInfH ? (isC ? "포수 뜬공!" : "내야 뜬공!") : `${dirText} 방향 높이 뜨는 타구!`) : (result.vel >= 90 ? `${dirText} 방향 강한 타구!` : `${dirText} 방향 타구!`)));
+            speak(`타구 속도 ${result.vel}마일! ${tText}`);
+
+
+
             if (dest.z <= -60) {
                 setTimeout(() => { if(isInPlay) speak("외야로 들어갑니다."); }, (flightTime * (60 / Math.abs(dest.z))) * 1000);
             }
@@ -1530,12 +1541,8 @@ if (chaseTime > 0) {
 
                 playGloveCatchSound(dest.x, dest.z);
                 
-let isOutfieldRoll = ['lf', 'cf', 'rf'].includes(activeFielderKey) && dest.z < -60;
-                if (isOutfieldRoll) {
-                    speak(`잡았습니다.`);
-                } else {
-                    speak(`${caughtByName} 잡았습니다.`);
-                }
+speak(`${caughtByName} 잡았습니다.`);
+
 
 
 
@@ -1936,10 +1943,15 @@ else if (e.code === "ArrowDown") {
 
 
 let cX = rtBallStartX + (rtBallEndX - rtBallStartX) * ratio;
-                let cZ = rtBallStartZ + (rtBallEndZ - rtBallStartZ) * ratio;
-                let cY = (rtBallTrajectory === 'fly' || rtBallTrajectory === 'wall') ? Math.sin(ratio * Math.PI) * 15 : (rtBallTrajectory === 'line' ? Math.sin(ratio * Math.PI) * 2.5 : 0);
+
+
+let cZ = rtBallStartZ + (rtBallEndZ - rtBallStartZ) * ratio;
+                let maxH = rtBallTrajectory === 'fly' ? 25 : (rtBallTrajectory === 'wall' ? 8 : (rtBallTrajectory === 'line' ? 2.5 : 0));
+                let cY = Math.sin(ratio * Math.PI) * maxH;
                 speak(`${Math.round(cX)}, ${Math.round(cZ)}, ${Math.round(cY)}`);
             }
+
+
 
 
         });
