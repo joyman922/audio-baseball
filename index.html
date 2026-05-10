@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-09 버전 1.071</div>
+        <div class="version-text">2026-05-09 버전 1.072</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -827,9 +827,12 @@ if (r < 80) {
 
 
 
-                    return foulFly('foul_c', getVel(65, 85), "포수 뒤쪽 높이 뜬 공!", "");
+return foulFly('foul_c', getVel(65, 85), "포수 뒤쪽 높이 뜬 공!", "포수 파울지역에서 잡아냅니다!");
                 }
-                return { inPlay: false, type: 'miss', msg: "헛스윙!" }; 
+                return { inPlay: false, type: 'miss', msg: "헛스윙!" };
+
+
+
             } 
             else if (swingType === 'short') {
 
@@ -848,9 +851,13 @@ if (timeDiff <= 40) {
 } else if (timeDiff <= 75) { 
                     if (r < 25) return hardHitInfield(getVel(70, 90));
                     if (r < 40) return jumpHitInfield(getVel(70, 85));
-                    if (r < 60) return pitcherAmbiguousHit(getVel(60, 85)); 
-                    if (r < 80) return foulFly('foul_c', getVel(65, 85), "포수 뒤쪽 높이 뜬 공!", "");
+
+
+if (r < 60) return pitcherAmbiguousHit(getVel(60, 85)); 
+                    if (r < 80) return foulFly('foul_c', getVel(65, 85), "포수 뒤쪽 높이 뜬 공!", "포수 파울지역에서 잡아냅니다!");
                     return grounder('1b', getVel(60, 85), "1루수 앞 땅볼!", "", false);
+
+
                 } else if (timeDiff <= 100) {
 
 
@@ -1170,18 +1177,17 @@ let dest = { x: baseDest.x + scatterX, z: baseDest.z + scatterZ };
             }
 
 if (result.isDeflected && !result.isJumpHit) {
+                let isInf = ['1b','2b','3b','ss'].includes(result.diver);
                 if (Math.random() < 0.2) {
-                    isFarDeflection = true;
-                    dest.x += (Math.random() * 30) - 15; 
-                    dest.z -= (Math.random() * 20 + 20); // 완전히 뒤로 빠짐 (-20~-40)
+                    isFarDeflection = true; dest.x += (Math.random() * 40) - 20; 
+                    dest.z -= isInf ? (Math.random() * 10 + 50) : (Math.random() * 20 + 20);
                     result.type = 'extra'; 
                 } else {
-                    dest.x += (Math.random() * 16) - 8; 
-                    dest.z += Math.random() < 0.5 ? (Math.random() * 4 + 6) : -(Math.random() * 5 + 10);
+                    dest.x += (Math.random() * 4 + 6) * (Math.random() < 0.5 ? 1 : -1); 
+                    dest.z += (Math.random() * 4 + 6) * (Math.random() < 0.5 ? 1 : -1);
                 }
-
-
             }
+
 
             let fenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
             if (result.type === 'hr') {
@@ -1211,11 +1217,16 @@ if (result.isDeflected && !result.isJumpHit) {
             let activeFielderKey = primaryFielder;
             if (result.isDivingCatch) {
                 activeFielderKey = result.diver;
-            } else if (result.isDeflected || result.isDivingMiss) {
+
+
+} else if (result.isDeflected || result.isDivingMiss) {
                 let minDist = Infinity;
                 let closestFielder = 'cf';
-                let allowedFielders = (isFarDeflection && dest.z < -60) ? ['lf', 'cf', 'rf'] : Object.keys(fielders);
+                let allowedFielders = (dest.z < -60) ? ['lf', 'cf', 'rf'] : Object.keys(fielders);
                 for (let key of allowedFielders) {
+
+
+
                     if (key === 'c' && dest.z > -10) continue; 
                     let d = Math.sqrt(Math.pow(dest.x - fielders[key].x, 2) + Math.pow(dest.z - fielders[key].z, 2));
                     if (d < minDist) { minDist = d; closestFielder = key; }
@@ -1385,9 +1396,14 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
 
 if (diveMsg !== "") {
                 let passT = result.diver ? flightTime * (Math.abs(fielders[result.diver].z) / Math.max(0.1, Math.abs(dest.z))) : flightTime;
-                let diveMsgTime = Math.max(0, Math.min(passT, flightTime) - 0.3);
+                let diveMsgTime = Math.max(0, Math.min(passT, flightTime) - 0.2);
                 setTimeout(() => { speak(diveMsg); }, diveMsgTime * 1000);
+                if (result.isDivingMiss || result.isDeflected) {
+                    setTimeout(() => { let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }, passT * 1000);
+                    result.msgDeflect = ""; result.msgCatch = ""; 
+                }
             }
+
 
 
 if (result.type === 'foul_drop') {
@@ -1404,10 +1420,12 @@ if (result.type === 'foul_drop') {
 
 if (result.isDeflected) {
                 if (audioBuffers["glove3"]) {
-                    const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=dest.x; p.positionZ.value=dest.z;
-                    const s = audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start(audioCtx.currentTime+flightTime);
+                    let passT = result.diver ? flightTime * (Math.abs(fielders[result.diver].z) / Math.max(0.1, Math.abs(dest.z))) : flightTime;
+                    const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=result.diver?fielders[result.diver].x:dest.x; p.positionZ.value=result.diver?fielders[result.diver].z:dest.z;
+                    const s = audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start(audioCtx.currentTime+passT);
                 }
             } else if (result.trajectory === 'ground') {
+
 
 
 
@@ -1450,11 +1468,14 @@ if (result.isDeflected) {
 
 
 let dirText = dest.x < -15 ? "좌측" : (dest.x > 15 ? "우측" : "중앙");
-            let trajText = result.trajectory === 'ground' ? "땅볼!" : (result.trajectory === 'fly' ? "뜬공!" : "빠른 타구!");
+            let trajText = result.trajectory === 'ground' ? "내야 땅볼!" : (result.trajectory === 'fly' ? "뜬공!" : (result.vel >= 90 ? "강한 타구!" : "타구!"));
             speak(`타구 속도 ${result.vel}마일! ${dirText} 방향 ${trajText}`);
-            if (dest.z < -60 && result.trajectory !== 'fly') {
+            if (dest.z <= -60) {
                 setTimeout(() => { if(isInPlay) speak("외야로 들어갑니다."); }, (flightTime * (60 / Math.abs(dest.z))) * 1000);
             }
+
+
+
             let timeToCatch = flightTime + chaseTime;
 
 
