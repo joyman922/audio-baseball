@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.075</div>
+        <div class="version-text">2026-05-10 버전 1.076</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1185,8 +1185,9 @@ let primaryFielder = 'cf'; let minFD = Infinity;
             let flightTime = distToDest / speedMs;
             
 if (result.trajectory === 'fly' && dest.z >= -60) {
-                flightTime *= 2.5; // 내야 뜬공만 포물선 체공시간 연장
+                flightTime *= 4.5; // 뜬공 체공시간을 대폭 상향시켜 수비가 잡을 시간을 보장
             }
+
             if (result.dir === 'foul_c') flightTime = Math.random() * 2.0 + 3.0; 
             // 외야 뜬공, 라인드라이브, 장타 등은 원본 1배속 유지
 
@@ -1345,11 +1346,13 @@ if (result.isDeflected) {
 } else if (result.trajectory === 'ground') {
                 let bCnt = Math.floor((flightTime + chaseTime) / 0.3);
                 for(let i=1; i<=bCnt; i++) playBounceSound(dest.x * (i/bCnt), dest.z * (i/bCnt), i * 0.3);
-            } else if (['line_l', 'line_r'].includes(result.dir)) {
 
 
+} else if (false) { // 구형 라인드라이브 허공 바운스 스포일러 차단
                 if (!['flyout', 'foul_flyout'].includes(result.type)) {
                     let flightRatioBase = 27.43 / Math.abs(dest.z);
+
+
                     playBounceSound(result.dir === 'line_l' ? -27.43 : 27.43, -27.43, flightTime * flightRatioBase);
                     let bounceZ = -(Math.random() * 20 + 40);
                     let bounceX = (result.dir === 'line_l') ? (bounceZ * (27.43/90)) : (bounceZ * (-27.43/90));
@@ -1357,9 +1360,13 @@ if (result.isDeflected) {
                     playBounceSound(bounceX, bounceZ, flightTime * flightRatioBounce);
                     playBounceSound(dest.x, dest.z, flightTime);
                 }
-            } else if (result.dir.startsWith('texas_') || ['past1b2b', 'past23between', 'past2b'].includes(result.dir)) {
+
+
+} else if (false) { // 구형 텍사스 안타 허공 바운스 스포일러 차단
                 if (!['flyout', 'foul_flyout'].includes(result.type)) {
                     let bounceZ = -(Math.random() * 20 + 60);
+
+
                     let flightRatio = Math.abs(bounceZ) / Math.abs(dest.z);
                     if (flightRatio > 0.9) flightRatio = 0.6;
                     playBounceSound(dest.x * flightRatio, bounceZ, flightTime * flightRatio);
@@ -1656,8 +1663,10 @@ let is1Bto1B = (targetBase === '1b' && activeFielderKey === '1b');
 
 if (['single', 'extra'].includes(result.type)) {
                     if (totalDefensiveTime < targetRunnerTime - 1.0 && targetBase !== '1b') {
-                        speak(`주자, 재빨리 ${prevBaseName}로 귀루합니다.`); await sleep(throwTime * 1000); playGloveCatchSound(targetCoord.x, targetCoord.z);
+                        speak(`${targetBaseName}로 송구! 주자, 재빨리 ${prevBaseName}로 귀루합니다.`); await sleep(throwTime * 1000); playGloveCatchSound(targetCoord.x, targetCoord.z);
                     } else if (totalDefensiveTime < targetRunnerTime - 1.0) {
+
+
                         if (targetBase === '1b') {
                             speak(`1루로 송구!${coverText}`);
                             await sleep(throwTime * 1000);
