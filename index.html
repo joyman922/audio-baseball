@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.076</div>
+        <div class="version-text">2026-05-10 버전 1.077</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1062,12 +1062,11 @@ let isNetting = (result.dir === 'foul_c' && dest.z > 10);
 
 let activeDef = null;
             if (['single', 'extra', 'groundout', 'flyout'].includes(result.type)) {
-                for (let key of ['1b', '2b', '3b', 'ss', 'lf', 'cf', 'rf']) {
-
-
-
-                    let inf = fielders[key]; let isInf = ['1b','2b','3b','ss'].includes(key);
+                for (let key of ['p', '1b', '2b', '3b', 'ss', 'lf', 'cf', 'rf']) {
+                    let inf = fielders[key]; let isInf = ['p','1b','2b','3b','ss'].includes(key);
                     let crossZ = inf.z;
+
+
                     if (dest.z > crossZ) continue; // 공이 수비수 라인에 도달하지 못하면 패스
 
                     let ratio = crossZ / dest.z;
@@ -1144,8 +1143,9 @@ let primaryFielder = 'cf'; let minFD = Infinity;
             let targetKeys = isOutfield ? ['lf', 'cf', 'rf'] : ['p', 'c', '1b', '2b', '3b', 'ss'];
             for (let k of targetKeys) {
                 let f = fielders[k]; if (k === 'c' && dest.z < -5) continue;
-                let cX = (dest.z < f.z) ? dest.x * (f.z / dest.z) : dest.x;
-                let d = Math.pow(cX - f.x, 2) + Math.pow(Math.max(dest.z, f.z) - f.z, 2);
+                let isFly = result.trajectory === 'fly';
+                let cX = (!isFly && dest.z < f.z) ? dest.x * (f.z / dest.z) : dest.x;
+                let d = Math.pow(cX - f.x, 2) + (isFly ? Math.pow(dest.z - f.z, 2) : Math.pow(Math.max(dest.z, f.z) - f.z, 2));
                 if (d < minFD) { minFD = d; primaryFielder = k; }
             }
 
@@ -1233,10 +1233,12 @@ if (isNetting) {
 
 
 else {
-                    if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = `${baseFielderNames[activeFielderKey]} 앞에 떨어지는 안타!`; } 
+                    let locMsg = (dest.z < fPos.z - 5) ? "키를 넘기는" : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어지는" : "앞에 떨어지는");
+                    if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = `${baseFielderNames[activeFielderKey]} ${locMsg} 안타!`; } 
                     else if (result.type === 'foul_flyout') { result.type = 'foul_drop'; result.msgCatch = ""; } 
-                    else if (['single', 'extra'].includes(result.type)) { result.msgCatch = `${baseFielderNames[activeFielderKey]} 앞에 떨어지는 안타!`; }
+                    else if (['single', 'extra'].includes(result.type)) { result.msgCatch = `${baseFielderNames[activeFielderKey]} ${locMsg} 안타!`; }
                 }
+
 
 
             }
