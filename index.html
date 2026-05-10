@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.082</div>
+        <div class="version-text">2026-05-10 버전 1.083</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1338,10 +1338,16 @@ if (diveMsg !== "") {
                 if (diveMsg.trim() !== "") setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
                 setTimeout(() => { 
                     if (result.isDivingCatch) { playGloveCatchSound(dest.x, dest.z); playUmpireSound('out', dest.x, dest.z); if(result.msgCatch) speak(result.msgCatch); }
-                    else { if (result.isDeflected && audioBuffers["glove3"]) { let s=audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(audioCtx.destination); s.start(); }
-                           let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }
-                    result.msgDeflect = ""; result.msgCatch = ""; 
+
+
+else { if (result.isDeflected && audioBuffers["glove3"]) {
+                               const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=dest.x; p.positionZ.value=dest.z; p.positionY.value=0;
+                               let s=audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start();
+                           } let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }
                 }, passT * 1000);
+
+
+
             }
 
 
@@ -1483,10 +1489,13 @@ if (chaseTime > 0) {
 
 } else if (result.isDeflected || result.isDivingMiss) {
                 await sleep(flightTime * 1000); 
-                let deflectMsg = result.msgDeflect || result.msgCatch;
-                speak(deflectMsg); 
+                
+                
                 
                 if (result.type === 'foul_drop') {
+
+
+
                     await sleep(800);
                     stopStepNodes();
                     updateListenerPosition(false); 
@@ -1587,16 +1596,14 @@ await sleep(timeToCatch * 1000);
 if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes("아웃") || result.trajectory === 'line') {
                     if (!result.isDivingCatch) playUmpireSound('out', dest.x, dest.z);
                     let cleanedMsg = result.msgCatch.replace(/아웃!|아웃\./g, "").trim();
-
-
-
-                    if (result.trajectory === 'line' && !cleanedMsg) cleanedMsg = "라인드라이브";
-                    if (cleanedMsg) speak(cleanedMsg);
+                    if (result.trajectory === 'line' && !cleanedMsg) cleanedMsg = `${caughtByName} 라인드라이브 잡아냅니다!`;
+                    if (cleanedMsg && !result.isDivingCatch) speak(cleanedMsg);
                 } else {
-
-
-                    speak(result.msgCatch); 
+                    if (!result.isDivingCatch && result.msgCatch) speak(result.msgCatch); 
                 }
+
+
+
             }
 
             if (['groundout', 'infield_hit', 'single', 'extra'].includes(result.type)) {
@@ -1606,10 +1613,10 @@ if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes(
                 // [추가] 야구의 완전 능동적 주루 판단 시스템 (송구 직전 물리적 시간에 따른 주자 위치 계산)
                 let timeToThrow = timeToCatch + fieldingTime;
                 
-                let runnerTime1B = 27.43 / 8.0 + 0.4; 
-                let runnerTime2B = (27.43 * 2) / 8.0 + 0.4; 
-                let runnerTime3B = (27.43 * 3) / 8.0 + 0.4; 
-                let runnerTimeHome = (27.43 * 4) / 8.0 + 0.4;
+                let runnerTime1B = 27.43 / 7.0 + 0.4; 
+                let runnerTime2B = (27.43 * 2) / 7.0 + 0.4; 
+                let runnerTime3B = (27.43 * 3) / 7.0 + 0.4; 
+                let runnerTimeHome = (27.43 * 4) / 7.0 + 0.4;
 
                 let targetBase = '1b'; 
                 let targetRunnerTime = runnerTime1B;
