@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.078</div>
+        <div class="version-text">2026-05-10 버전 1.079</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1148,6 +1148,7 @@ let primaryFielder = 'cf'; let minFD = Infinity;
                 let f = fielders[k]; if (k === 'c' && dest.z < -5) continue;
                 let isFly = result.trajectory === 'fly';
                 let cX = (!isFly && dest.z < f.z) ? dest.x * (f.z / dest.z) : dest.x;
+                if (k === 'p' && !isFly && Math.abs(cX) > 14.0) continue; // 투수 좌우 수비 반경 4m 제한
                 let d = Math.pow(cX - f.x, 2) + (isFly ? Math.pow(dest.z - f.z, 2) : Math.pow(Math.max(dest.z, f.z) - f.z, 2));
                 if (d < minFD) { minFD = d; primaryFielder = k; }
             }
@@ -1320,10 +1321,12 @@ let passT = flightTime;
             if (diveMsg !== "") {
                 passT = result.diver ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
                 setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
-                if (result.isDivingMiss || result.isDeflected) {
-                    setTimeout(() => { let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }, passT * 1000);
+                setTimeout(() => { 
+                    if (result.isDivingCatch) { playGloveCatchSound(dest.x, dest.z); if(result.msgCatch) speak(result.msgCatch); }
+                    else { if (result.isDeflected && audioBuffers["glove3"]) { let s=audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(audioCtx.destination); s.start(); }
+                           let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }
                     result.msgDeflect = ""; result.msgCatch = ""; 
-                }
+                }, passT * 1000);
             }
 
 
@@ -1340,15 +1343,13 @@ if (result.type === 'foul_drop') {
 
 
 
-if (result.isDeflected) {
-                if (audioBuffers["glove3"]) {
-                    let gT = result.diver ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
-                    const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.positionX.value=result.diver?fielders[result.diver].x:dest.x; p.positionZ.value=result.diver?fielders[result.diver].z:dest.z;
-                    const s = audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(p); p.connect(audioCtx.destination); s.start(audioCtx.currentTime+gT);
-                }
-
-
+if (false) {
+                // 글러브 굴절음은 다이빙 캐치 setTimeout 안으로 통합되어 제거됨
 } else if (result.trajectory === 'ground') {
+
+
+
+
                 let bCnt = Math.floor((flightTime + chaseTime) / 0.3);
                 for(let i=1; i<=bCnt; i++) playBounceSound(dest.x * (i/bCnt), dest.z * (i/bCnt), i * 0.3);
 
@@ -1395,9 +1396,10 @@ if (result.isDeflected) {
 
 let initDir = dest.x > 15 ? "우측" : (dest.x < -15 ? "좌측" : "중앙");
             let isInf = dest.z >= -60;
-            let phrase = result.trajectory === 'ground' ? `${initDir} 방향 땅볼!` : 
+            let phrase = result.trajectory === 'ground' ? `내야 땅볼!` : 
                          (result.trajectory === 'fly' ? (isInf ? (dest.z > -10 || result.dir === 'foul_c' ? "뒤쪽에 뜬 공!" : "내야에 높이 뜹니다!") : `${initDir} 방향 높이 솟구칩니다!`) : 
                          (result.vel >= 95 ? `${initDir} 방향 날카로운 타구!` : `${initDir} 방향 타구!`));
+
 
             // 스포일러 역할이던 파울 덮어쓰기 로직 제거됨
 
@@ -1564,10 +1566,13 @@ if (chaseTime > 0) {
 
 
 
-                await sleep(timeToCatch * 1000);
-                if (result.type !== 'foul_drop') playGloveCatchSound(dest.x, dest.z); 
+await sleep(timeToCatch * 1000);
+                if (result.type !== 'foul_drop' && !result.isDivingCatch) playGloveCatchSound(dest.x, dest.z); 
                 
 if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes("아웃") || result.trajectory === 'line') {
+
+
+
                     playUmpireSound('out', dest.x, dest.z);
                     let cleanedMsg = result.msgCatch.replace(/아웃!|아웃\./g, "").trim();
                     if (result.trajectory === 'line' && !cleanedMsg) cleanedMsg = "라인드라이브";
@@ -1655,9 +1660,12 @@ let is1Bto1B = (targetBase === '1b' && activeFielderKey === '1b');
                 if (targetBase !== 'c' && distToTargetBase < 5.0 && !is1Bto1B) {
                     coverText = ` ${baseFielderNames[activeFielderKey]} 직접 베이스 터치!`; throwTime = 0.5; totalDefensiveTime = timeToThrow + throwTime;
                 } else if (targetBase !== 'c') {
-                    coverText = ` ${baseFielderNames[closestBaseCover]}, ${targetBase === '1b' ? '1루' : (targetBase === '2b' ? '2루' : '3루')} 베이스 커버!`;
-                    if (is1Bto1B) totalDefensiveTime = Math.max(timeToThrow + throwTime, Math.sqrt(Math.pow(targetCoord.x - fielders['p'].x, 2) + Math.pow(targetCoord.z - fielders['p'].z, 2)) / 7.5);
+
+
+coverText = ` ${baseFielderNames[closestBaseCover]}, ${targetBase === '1b' ? '1루' : (targetBase === '2b' ? '2루' : '3루')} 베이스 커버!`;
+                    if (is1Bto1B) totalDefensiveTime = Math.max(timeToThrow + throwTime, (Math.sqrt(Math.pow(targetCoord.x - fielders['p'].x, 2) + Math.pow(targetCoord.z - fielders['p'].z, 2)) / 8.5) - 0.5);
                 }
+
 
 
 
