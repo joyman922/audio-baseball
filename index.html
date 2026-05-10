@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.086</div>
+        <div class="version-text">2026-05-10 버전 1.087</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1020,9 +1020,9 @@ if (result.type.includes('foul')) {
                 if (result.type === 'hr') dest.z = fenceLimit(dest.x) - (Math.random() * 10 + 5);
 
 
-//내야 땅볼 범위
+//-내야 땅볼 범위
 } else if (result.trajectory === 'ground') {
-                dest.z = -(Math.random() * 45); dest.x = (Math.random() * 2 - 1) * (Math.abs(dest.z) + 3);
+                dest.z = -(Math.random() * 30 + 15); dest.x = (Math.random() * 2 - 1) * (Math.abs(dest.z) + 5);
             } else if (result.type === 'single') {
 
 
@@ -1204,6 +1204,7 @@ let primaryFielder = 'cf'; let minFD = Infinity;
             let speedMs = result.vel * 0.44704; 
             let flightTime = distToDest / speedMs;
             
+//-공 뜨는 시간
 if (result.trajectory === 'fly' && dest.z >= -60) {
                 flightTime *= 1.5; // 뜬공 체공시간을 대폭 상향시켜 수비가 잡을 시간을 보장
             }
@@ -1346,10 +1347,15 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
 let passT = flightTime;
 
 if (diveMsg !== "") {
-                passT = result.diver ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
+                passT = (result.diver && result.trajectory !== 'fly') ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
 
 
 if (diveMsg.trim() !== "") setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
+
+
+
+
+
                 setTimeout(() => { 
                     if (result.isDivingCatch) { playGloveCatchSound(dest.x, dest.z); if (result.type === 'flyout') playUmpireSound('out', dest.x, dest.z); if(result.msgCatch) speak(result.msgCatch); }
                     else { if (result.isDeflected && audioBuffers["glove3"]) {
