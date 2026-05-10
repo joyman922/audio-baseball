@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.088</div>
+        <div class="version-text">2026-05-10 버전 1.089</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1210,7 +1210,7 @@ let primaryFielder = 'cf'; let minFD = Infinity;
             
 //-공 뜨는 시간
 if (result.trajectory === 'fly' && dest.z >= -60) {
-                flightTime *= 1.5; // 뜬공 체공시간을 대폭 상향시켜 수비가 잡을 시간을 보장
+                flightTime *= 1.3; // 뜬공 체공시간을 대폭 상향시켜 수비가 잡을 시간을 보장
             }
 
             if (result.dir === 'foul_c') flightTime = Math.random() * 2.0 + 3.0; 
@@ -1267,10 +1267,11 @@ let isInf = ['p','c','1b','2b','3b','ss'].includes(activeFielderKey);
 
 
 
-                    if (result.trajectory === 'wall' || dest.z <= fenceZ + 1.0) hitMsg = ""; 
-                    if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = hitMsg ? `${baseFielderNames[activeFielderKey]} ${hitMsg}` : ""; } 
+if (result.trajectory === 'wall' || dest.z <= fenceZ + 1.0) hitMsg = ""; 
+                    let fullDropMsg = hitMsg ? `${baseFielderNames[activeFielderKey]} ${hitMsg}` : "";
+                    if (result.type === 'flyout') { result.type = 'single'; result.msgDrop = fullDropMsg; result.msgCatch = ""; } 
                     else if (result.type === 'foul_flyout') { result.type = 'foul_drop'; result.msgCatch = ""; } 
-                    else if (['single', 'extra'].includes(result.type)) { result.msgCatch = hitMsg ? `${baseFielderNames[activeFielderKey]} ${hitMsg}` : ""; }
+                    else if (['single', 'extra'].includes(result.type)) { result.msgDrop = fullDropMsg; result.msgCatch = ""; }
                 }
 
 
@@ -1311,7 +1312,7 @@ if (result.isDeflected || result.isDivingMiss) {
 
 
 //-키 넘긴 후 대기 시간. 첫줄의 첫 소수 숫자
-let backPen = (dest.z < fPos.z - 3) ? 0.8 : 0.0;
+let backPen = (dest.z < fPos.z - 3) ? 1.0 : 0.0;
                 if (result.isDivingCatch) { chaseTime = 0; fielderRunTime = flightTime; actualRunTime = 0;
                 } else if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
                     chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0)) + backPen;
@@ -1565,9 +1566,12 @@ speak(`${caughtByName} 잡았습니다.`);
 
 } else if (['single', 'extra'].includes(result.type)) {
                 await sleep(flightTime * 1000);
-
+                if (result.msgDrop) speak(result.msgDrop);
 
 let currentFenceZ = -160 + (Math.min(Math.abs(dest.x), 75) / 75) * 10;
+
+
+
                 let isHitFence = (result.trajectory === 'wall') || (dest.z <= currentFenceZ + 1.0);
                 
                 if (isHitFence) {
@@ -1641,11 +1645,11 @@ if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes(
                 let timeToThrow = timeToCatch + fieldingTime;
                 
 
-//주자 진루 속도
-                let runnerTime1B = 27.43 / 7.5 + 0.4; 
-                let runnerTime2B = (27.43 * 2) / 7.5 + 0.4; 
-                let runnerTime3B = (27.43 * 3) / 7.5 + 0.4; 
-                let runnerTimeHome = (27.43 * 4) / 7.5 + 0.4;
+//-주자 진루 속도
+                let runnerTime1B = 27.43 / 8.0 + 0.4; 
+                let runnerTime2B = (27.43 * 2) / 8.0 + 0.4; 
+                let runnerTime3B = (27.43 * 3) / 8.0 + 0.4; 
+                let runnerTimeHome = (27.43 * 4) / 8.0 + 0.4;
 
                 let targetBase = '1b'; 
                 let targetRunnerTime = runnerTime1B;
