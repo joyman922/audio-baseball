@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.081</div>
+        <div class="version-text">2026-05-10 버전 1.082</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1109,13 +1109,14 @@ let maxDx = isInf ? 5.0 : 6.0;
             }
 
             if (activeDef) {
-                let fX = activeDef.x; let fZ = activeDef.z; let cF = activeDef.fielder; let roll = Math.random();
+
+let fX = activeDef.x; let fZ = activeDef.z; let cF = activeDef.fielder; let roll = Math.random();
                 if (activeDef.type === 'direct') {
                     result.type = 'flyout'; result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ };
-                    result.msgCatch = `${baseFielderNames[cF]} 제자리에서 훌쩍 뛰어 그대로 잡아냅니다!`; diveMsg = "";
+                    result.msgCatch = `${baseFielderNames[cF]} 제자리에서 훌쩍 뛰어 그대로 잡아냅니다!`; diveMsg = " "; // 오디오 스케줄러 진입을 위한 공백 유지
+                } else if (activeDef.type === 'jump') {
 
 
-} else if (activeDef.type === 'jump') {
                     diveMsg = `${baseFielderNames[cF]} 점프합니다!`;
                     if (roll < 0.40) { result.type = 'flyout'; result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ }; result.msgCatch = "나이스 캐치! 잡았습니다!"; } 
                     else if (roll < 0.70) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ + (Math.random() * 4 + 6) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 앞에 떨어집니다!`; result.type = 'single'; } 
@@ -1157,7 +1158,7 @@ let primaryFielder = 'cf'; let minFD = Infinity;
                 let f = fielders[k]; if (k === 'c' && dest.z < -5) continue;
                 let isFly = result.trajectory === 'fly';
                 let cX = (!isFly && dest.z < f.z) ? dest.x * (f.z / dest.z) : dest.x;
-                if (k === 'p' && !isFly && Math.abs(cX) > 14.0) continue; // 투수 좌우 수비 반경 4m 제한
+                if (k === 'p' && !isFly && Math.abs(cX) > 4.0) continue; // 투수 좌우 수비 반경 4m 제한
                 let d = Math.pow(cX - f.x, 2) + (isFly ? Math.pow(dest.z - f.z, 2) : Math.pow(Math.max(dest.z, f.z) - f.z, 2));
                 if (d < minFD) { minFD = d; primaryFielder = k; }
             }
@@ -1331,11 +1332,12 @@ audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + fligh
 
 
 let passT = flightTime;
-            if (diveMsg !== "") {
+
+if (diveMsg !== "") {
                 passT = result.diver ? (Math.sqrt(Math.pow(fielders[result.diver].x, 2) + Math.pow(fielders[result.diver].z, 2)) / speedMs) : flightTime;
-                setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
+                if (diveMsg.trim() !== "") setTimeout(() => { speak(diveMsg); }, Math.max(0, passT - 0.2) * 1000);
                 setTimeout(() => { 
-                    if (result.isDivingCatch) { playGloveCatchSound(dest.x, dest.z); if(result.msgCatch) speak(result.msgCatch); }
+                    if (result.isDivingCatch) { playGloveCatchSound(dest.x, dest.z); playUmpireSound('out', dest.x, dest.z); if(result.msgCatch) speak(result.msgCatch); }
                     else { if (result.isDeflected && audioBuffers["glove3"]) { let s=audioCtx.createBufferSource(); s.buffer=audioBuffers["glove3"]; s.connect(audioCtx.destination); s.start(); }
                            let dm = result.msgDeflect || result.msgCatch; if(dm) speak(dm); }
                     result.msgDeflect = ""; result.msgCatch = ""; 
@@ -1583,11 +1585,11 @@ await sleep(timeToCatch * 1000);
                 if (result.type !== 'foul_drop' && !result.isDivingCatch) playGloveCatchSound(dest.x, dest.z); 
                 
 if (['flyout', 'foul_flyout'].includes(result.type) || result.msgCatch.includes("아웃") || result.trajectory === 'line') {
-
-
-
-                    playUmpireSound('out', dest.x, dest.z);
+                    if (!result.isDivingCatch) playUmpireSound('out', dest.x, dest.z);
                     let cleanedMsg = result.msgCatch.replace(/아웃!|아웃\./g, "").trim();
+
+
+
                     if (result.trajectory === 'line' && !cleanedMsg) cleanedMsg = "라인드라이브";
                     if (cleanedMsg) speak(cleanedMsg);
                 } else {
