@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.084</div>
+        <div class="version-text">2026-05-10 버전 1.085</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1254,10 +1254,14 @@ if (isNetting) {
 
 
 else {
-                    let isInf = ['p','c','1b','2b','3b','ss'].includes(activeFielderKey);
-                    let locMsg = result.trajectory === 'ground' ? ((dest.z < fPos.z - 5) ? "옆을 빠져나갑니다." : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어집니다." : "앞에 떨어집니다.")) : ((dest.z < fPos.z - 5) ? (isInf ? "키를 넘깁니다." : "키를 넘깁니다.") : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어집니다." : "앞에 떨어집니다."));
-                    let hitMsg = isInf ? locMsg : locMsg.replace("니다.", "는 안타!");
+
+let isInf = ['p','c','1b','2b','3b','ss'].includes(activeFielderKey);
+                    let locMsg = result.trajectory === 'ground' ? ((dest.z < fPos.z - 5) ? "옆을 빠져나갑니다." : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어집니다." : "앞에 떨어집니다.")) : ((dest.z < fPos.z - 5) ? "키를 넘깁니다." : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어집니다." : "앞에 떨어집니다."));
+                    let hitMsg = isInf ? locMsg : (locMsg.includes("넘깁") ? "키를 넘기는 안타!" : locMsg.replace("니다.", "는 안타!"));
                     let fenceZ = -160 + (Math.min(Math.abs(dest.x), 75) / 75) * 10;
+
+
+
                     if (result.trajectory === 'wall' || dest.z <= fenceZ + 1.0) hitMsg = ""; 
                     if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = hitMsg ? `${baseFielderNames[activeFielderKey]} ${hitMsg}` : ""; } 
                     else if (result.type === 'foul_flyout') { result.type = 'foul_drop'; result.msgCatch = ""; } 
@@ -1301,19 +1305,20 @@ if (result.isDeflected || result.isDivingMiss) {
 
 
 
-if (result.isDivingCatch) {
-                    chaseTime = 0; fielderRunTime = flightTime; actualRunTime = 0;
+//-키 넘긴 후 대기 시간. 첫줄의 첫 소수 숫자
+let backPen = (dest.z < fPos.z - 3) ? 0.8 : 0.0;
+                if (result.isDivingCatch) { chaseTime = 0; fielderRunTime = flightTime; actualRunTime = 0;
                 } else if (['single', 'extra', 'infield_hit', 'foul_drop'].includes(result.type)) {
-                    chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0));
+                    chaseTime = Math.max(0.2, fielderRunTime - flightTime + (result.trajectory === 'wall' ? 1.0 : 0.0)) + backPen;
                     fielderRunTime = flightTime + chaseTime; 
                 } else if (['groundout', 'flyout', 'foul_flyout'].includes(result.type)) {
-
-
-
-                    chaseTime = Math.max(0.0, fielderRunTime - flightTime);
+                    chaseTime = Math.max(0.0, fielderRunTime - flightTime) + backPen;
                     fielderRunTime = flightTime + chaseTime;
                 }
-                
+
+
+
+
                 if (actualRunTime < fielderRunTime && !result.isDivingCatch) {
                     stepStartOffset = fielderRunTime - actualRunTime; 
                 }
@@ -1714,30 +1719,33 @@ coverText = ` ${baseFielderNames[closestBaseCover]}, ${targetBase === '1b' ? '1�
 
 if (['single', 'extra'].includes(result.type)) {
                     if (totalDefensiveTime < targetRunnerTime - 1.0 && targetBase !== '1b') {
-                        speak(`${targetBaseName}로 송구! 주자, 재빨리 ${prevBaseName}로 귀루합니다.`); await sleep(throwTime * 1000); playGloveCatchSound(targetCoord.x, targetCoord.z);
+                        speak(`${caughtByName}, ${targetBaseName}로 송구! 주자, 재빨리 ${prevBaseName}로 귀루합니다.`); await sleep(throwTime * 1000); playGloveCatchSound(targetCoord.x, targetCoord.z);
                     } else if (totalDefensiveTime < targetRunnerTime - 1.0) {
-
-
                         if (targetBase === '1b') {
-                            speak(`1루로 송구!${coverText}`);
+                            speak(`${caughtByName}, 1루로 송구!${coverText}`);
                             await sleep(throwTime * 1000);
 
 
 
                             playGloveCatchSound(targetCoord.x, targetCoord.z);
                             playUmpireSound('out', targetCoord.x, targetCoord.z);
-                        } else {
-                            speak(`${targetBaseName}로 송구!${coverText}`);
+
+} else {
+                            speak(`${caughtByName}, ${targetBaseName}로 송구!${coverText}`);
                             await sleep(throwTime * 1000);
                             playGloveCatchSound(targetCoord.x, targetCoord.z);
                         }
                     } else if (totalDefensiveTime > targetRunnerTime + 1.5) {
-                        speak(`주자 계속 달립니다! ${targetBaseName}로 송구!${coverText}`);
+                        speak(`주자 계속 달립니다! ${caughtByName}, ${targetBaseName}로 송구!${coverText}`);
                         await sleep(throwTime * 1000);
                         playGloveCatchSound(targetCoord.x, targetCoord.z);
                         playUmpireSound('safe', targetCoord.x, targetCoord.z);
                     } else {
-                        speak(`${targetBaseName}로 송구! 접전입니다!${coverText}`);
+                        speak(`${caughtByName}, ${targetBaseName}로 송구! 접전입니다!${coverText}`);
+
+
+
+
                         await sleep(throwTime * 1000); 
                         playGloveCatchSound(targetCoord.x, targetCoord.z); 
                         if (targetRunnerTime < totalDefensiveTime) {
@@ -1745,12 +1753,18 @@ if (['single', 'extra'].includes(result.type)) {
                         } else {
                             playUmpireSound('out', targetCoord.x, targetCoord.z);
                         }
-                    }
+
+}
                     await sleep(800);
                 } else {
-                    speak(`${targetBaseName}로 송구!${coverText}`);
+                    speak(`${caughtByName}, ${targetBaseName}로 송구!${coverText}`);
                     await sleep(throwTime * 1000); 
-                    playGloveCatchSound(targetCoord.x, targetCoord.z); 
+                    playGloveCatchSound(targetCoord.x, targetCoord.z);
+
+
+
+
+
 
                     if (targetRunnerTime < totalDefensiveTime) {
                         playUmpireSound('safe', targetCoord.x, targetCoord.z);
