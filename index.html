@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.087</div>
+        <div class="version-text">2026-05-10 버전 1.088</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -398,16 +398,18 @@ rtBallStartX = startX; rtBallStartZ = startZ;
 if (trajectory === 'fly') {
                 filter.frequency.exponentialRampToValueAtTime(Math.max(150, baseFreq * 0.5), now + totalMoveTime); 
                 gain.gain.linearRampToValueAtTime(peakVol * 0.5, now + totalMoveTime); 
-                // [수정] 페이드아웃 시작 볼륨을 fly 타구에 맞게 명시적 고정 (팝핑 노이즈 완벽 방지)
-                gain.gain.setValueAtTime(peakVol * 0.5, now + totalMoveTime);
+
+// [수정] 타이머 지연으로 인한 오디오 빈틈을 막기 위해 0.15초 서스테인 추가
+                gain.gain.setValueAtTime(peakVol * 0.5, now + totalMoveTime + 0.15);
             } else {
                 gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
-                // [수정] 페이드아웃 시작 볼륨을 지상 타구에 맞게 명시적 고정 (팝핑 노이즈 완벽 방지)
-                gain.gain.setValueAtTime(peakVol, now + totalMoveTime);
+                // [수정] 타이머 지연으로 인한 오디오 빈틈을 막기 위해 0.15초 서스테인 추가
+                gain.gain.setValueAtTime(peakVol, now + totalMoveTime + 0.15);
             }
 
             // 송구음/타구음 끝날 때 뚝 끊기지 않고 0.4초 글리산도 페이드아웃 (자연스러운 여운)
-            gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.4);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + totalMoveTime + 0.55);
+
 
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; 
@@ -448,13 +450,15 @@ let yCurve = [1.0];
 
             panner.positionZ.linearRampToValueAtTime(endZ, now + totalMoveTime);
 
-            src.connect(filter); filter.connect(gain); gain.connect(panner); panner.connect(audioCtx.destination);
+src.connect(filter); filter.connect(gain); gain.connect(panner); panner.connect(audioCtx.destination);
             src.start(now); 
             
-            // [수정] 페이드아웃이 완전히 끝날 수 있도록 0.5초 대기 후 종료 (오버랩 잘림 방지)
-            src.stop(now + totalMoveTime + 0.5); 
+            // [수정] 페이드아웃 연장에 맞춰 안전하게 0.7초 대기 후 종료
+            src.stop(now + totalMoveTime + 0.7); 
             
             activeNodes.push({ type: 'inplay', src: src, gain: gain });
+
+
         }
 
 
@@ -1340,7 +1344,7 @@ let backPen = (dest.z < fPos.z - 3) ? 0.8 : 0.0;
 
 audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + flightTime + chaseTime);
 
-            let actualRollTime = (result.trajectory === 'wall' || result.type.includes('flyout') || result.type === 'hr') ? 0 : chaseTime;
+            let actualRollTime = (result.trajectory === 'wall' || result.type === 'hr') ? 0 : chaseTime;
             playBallFlightSound(0, 0, dest.x, dest.z, flightTime, actualRollTime, result.vel, result.trajectory, false);
 
 
