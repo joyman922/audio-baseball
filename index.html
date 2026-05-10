@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.079</div>
+        <div class="version-text">2026-05-10 버전 1.080</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1021,8 +1021,10 @@ if (result.type.includes('foul')) {
 
 
 } else if (result.trajectory === 'ground') {
-                dest.z = -(Math.random() * 58); dest.x = (Math.random() * 2 - 1) * (Math.abs(dest.z) + 3);
+                dest.z = -(Math.random() * 50); dest.x = (Math.random() * 2 - 1) * (Math.abs(dest.z) + 3);
             } else if (result.type === 'single') {
+
+
                 dest.z = -(Math.random() * 23 + 35); dest.x = (Math.random() * 2 - 1) * (Math.abs(dest.z) + 3);
                 if (Math.random() < 0.5) { dest.z -= (Math.random() * 20 + 25); dest.x += (Math.random() * 2 - 1) * 15; }
             }
@@ -1111,20 +1113,27 @@ let maxDx = isInf ? 5.0 : 6.0;
                 if (activeDef.type === 'direct') {
                     result.type = 'flyout'; result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ };
                     result.msgCatch = `${baseFielderNames[cF]} 제자리에서 훌쩍 뛰어 그대로 잡아냅니다!`; diveMsg = "";
-                } else if (activeDef.type === 'jump') {
+
+
+} else if (activeDef.type === 'jump') {
                     diveMsg = `${baseFielderNames[cF]} 점프합니다!`;
                     if (roll < 0.40) { result.type = 'flyout'; result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ }; result.msgCatch = "나이스 캐치! 잡았습니다!"; } 
-                    else if (roll < 0.70) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ + (Math.random() * 4 + 6) }; result.msgDeflect = "글러브 맞고 앞에 떨어집니다!"; result.type = 'single'; } 
-                    else if (roll < 0.90) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ - (Math.random() * 5 + 10) }; result.msgDeflect = "글러브 맞고 뒤로 빠집니다!"; result.type = 'single'; } 
+                    else if (roll < 0.70) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ + (Math.random() * 4 + 6) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 앞에 떨어집니다!`; result.type = 'single'; } 
+                    else if (roll < 0.90) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ - (Math.random() * 5 + 10) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 뒤로 빠집니다!`; result.type = 'single'; } 
                     else { result.isDivingMiss = true; result.diver = cF; result.msgDeflect = "키를 훌쩍 넘깁니다!"; }
-                } else if (activeDef.type === 'dive') {
+
+
+
+
+} else if (activeDef.type === 'dive') {
                     diveMsg = `${baseFielderNames[cF]} 몸을 날립니다!`;
                     if (roll < 0.50) { result.type = 'flyout'; result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ }; result.msgCatch = "나이스 캐치! 잡았습니다!"; } 
-                    else if (roll < 0.70) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ + (Math.random() * 4 + 6) }; result.msgDeflect = "글러브 맞고 앞에 떨어집니다!"; result.type = 'single'; } 
-                    else if (roll < 0.80) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ - (Math.random() * 5 + 10) }; result.msgDeflect = "글러브 맞고 뒤로 굴절!"; result.type = 'single'; } 
-                    else if (roll < 0.90) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 5 + 10), z: Math.max(fenceLimit(dest.x), fZ - (activeDef.isInf ? (Math.random() * 20 + 40) : (Math.random() * 20 + 20))) }; result.msgDeflect = "글러브 맞고 완전히 빠집니다!"; result.type = 'extra'; } 
+                    else if (roll < 0.70) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ + (Math.random() * 4 + 6) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 앞에 떨어집니다!`; result.type = 'single'; } 
+                    else if (roll < 0.80) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ - (Math.random() * 5 + 10) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 뒤로 굴절!`; result.type = 'single'; } 
+                    else if (roll < 0.90) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 5 + 10), z: Math.max(fenceLimit(dest.x), fZ - (activeDef.isInf ? (Math.random() * 20 + 40) : (Math.random() * 20 + 20))) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 완전히 빠집니다!`; result.type = 'extra'; } 
                     else { result.isDivingMiss = true; result.diver = cF; result.msgDeflect = "몸을 날렸으나 공이 그대로 빠져나갑니다!"; }
                 }
+
             }
 
 
@@ -1237,10 +1246,12 @@ if (isNetting) {
 
 
 else {
-                    let locMsg = (dest.z < fPos.z - 5) ? "키를 넘기는" : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어지는" : "앞에 떨어지는");
-                    if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = `${baseFielderNames[activeFielderKey]} ${locMsg} 안타!`; } 
+                    let isInf = ['p','c','1b','2b','3b','ss'].includes(activeFielderKey);
+                    let locMsg = (dest.z < fPos.z - 5) ? "키를 넘기는" : (Math.abs(dest.x - fPos.x) > 4 ? "옆에" : "앞에");
+                    let hitMsg = isInf ? `${locMsg} 떨어집니다!` : `${locMsg} 떨어지는 안타!`;
+                    if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = `${baseFielderNames[activeFielderKey]} ${hitMsg}`; } 
                     else if (result.type === 'foul_flyout') { result.type = 'foul_drop'; result.msgCatch = ""; } 
-                    else if (['single', 'extra'].includes(result.type)) { result.msgCatch = `${baseFielderNames[activeFielderKey]} ${locMsg} 안타!`; }
+                    else if (['single', 'extra'].includes(result.type)) { result.msgCatch = `${baseFielderNames[activeFielderKey]} ${hitMsg}`; }
                 }
 
 
