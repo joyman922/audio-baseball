@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.085</div>
+        <div class="version-text">2026-05-10 버전 1.086</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1456,10 +1456,13 @@ if (pT >= flightTime) pT = Math.max(0, flightTime - 0.2);
 if (dest.z <= -45) setTimeout(() => { if (isInPlay && audioCtx.currentTime - rtBallStartTime < flightTime - 0.15) {
                 if (result.trajectory === 'fly') { if (dest.z < -60 && Math.random() < 0.5) speak("외야 쪽으로 뻗어갑니다."); }
                 else { 
-                    let crossX = dest.x * (-35 / dest.z); // 내야 통과 시점의 궤적 역산
+
+let crossX = dest.x * (-35 / dest.z); // 내야 통과 시점의 궤적 역산
                     let p = crossX > 20 ? "1루수 옆" : (crossX > 8 ? "1,2루간" : (crossX > -8 ? "센터 쪽" : (crossX > -20 ? "3유간" : "3루수 옆"))); 
-                    speak(`${p}!`); if (dest.z <= -60 && !['flyout', 'groundout'].includes(result.type)) setTimeout(() => { if(isInPlay) speak("외야로 빠져나갑니다!"); }, 600);
+                    speak(`${p}!`); if (dest.z <= -60 && !['groundout'].includes(result.type)) setTimeout(() => { if(isInPlay) speak("외야로 빠져나갑니다!"); }, 600);
                 }
+
+
             } }, pT * 1000);
 
 
@@ -1580,23 +1583,18 @@ if (result.msgCatch) {
                 }
 
 
-            } else if (result.type === 'groundout' || result.type === 'infield_hit') {
+} else if (result.type === 'groundout' || result.type === 'infield_hit') {
+                    await sleep(flightTime * 1000);
+                    if (chaseTime > 0) {
+                        playRestingSound(dest.x, dest.z, true);
+                        await sleep(chaseTime * 1000);
+                    }
+                    if (!result.isDivingCatch) {
+                        playGloveCatchSound(dest.x, dest.z);
+                        speak(`${caughtByName} 잡았습니다.`);
+                    }
+                } else {
 
-
-                await sleep(flightTime * 1000);
-
-
-if (chaseTime > 0) {
-                    playRestingSound(dest.x, dest.z, true);
-                    await sleep(chaseTime * 1000);
-                }
-
-
-
-
-                playGloveCatchSound(dest.x, dest.z);
-                speak(`${caughtByName} 잡았습니다.`);
-            } else {
 
 
 
