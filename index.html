@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.077</div>
+        <div class="version-text">2026-05-10 버전 1.078</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1084,10 +1084,11 @@ let activeDef = null;
                         crossY = 1.0 * (1 - ratio) + Math.sin(ratio * Math.PI) * peak;
                     }
 
-                    let maxDx = isInf ? 5.0 : 6.0;
+let maxDx = isInf ? 5.0 : 6.0;
 
-                    if (dx <= maxDx) {
+                    if (dx <= maxDx && !(result.trajectory === 'fly' && dest.z >= -60)) {
                         // 1. 다이렉트 캐치 (주변 1m 이내, 높이 2m 이하)
+
                         if (dx <= 1.0 && crossY <= 2.0) {
                             activeDef = { type: 'direct', fielder: key, x: crossX, z: crossZ, isInf: isInf }; break;
                         }
@@ -1130,14 +1131,16 @@ let activeDef = null;
 
 
 
-            let fenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
-            if (result.type === 'hr') {
-                dest.z = fenceZ - (Math.random() * 10 + 5); 
-            } else if (result.trajectory === 'wall') {
-                dest.z = fenceZ; 
-            } else if (dest.z < fenceZ) {
-                dest.z = fenceZ; 
+let fenceZ = -160 + (Math.abs(dest.x) / 75) * 10;
+            if (!result.isDivingCatch && !result.isDeflected) {
+                if (result.type === 'hr') dest.z = fenceZ - (Math.random() * 10 + 5); 
+                else if (result.trajectory === 'wall') dest.z = fenceZ; 
+                else if (dest.z < fenceZ) dest.z = fenceZ; 
             }
+
+
+
+
 
 let primaryFielder = 'cf'; let minFD = Infinity;
             let targetKeys = isOutfield ? ['lf', 'cf', 'rf'] : ['p', 'c', '1b', '2b', '3b', 'ss'];
