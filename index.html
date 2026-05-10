@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.080</div>
+        <div class="version-text">2026-05-10 버전 1.081</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1198,7 +1198,7 @@ let primaryFielder = 'cf'; let minFD = Infinity;
             let flightTime = distToDest / speedMs;
             
 if (result.trajectory === 'fly' && dest.z >= -60) {
-                flightTime *= 4.5; // 뜬공 체공시간을 대폭 상향시켜 수비가 잡을 시간을 보장
+                flightTime *= 1.5; // 뜬공 체공시간을 대폭 상향시켜 수비가 잡을 시간을 보장
             }
 
             if (result.dir === 'foul_c') flightTime = Math.random() * 2.0 + 3.0; 
@@ -1214,7 +1214,7 @@ if (result.trajectory === 'fly' && dest.z >= -60) {
             let distToBall = Math.sqrt(Math.pow(dest.x - fPos.x, 2) + Math.pow(dest.z - fPos.z, 2));
             if (['single'].includes(result.type) && isOutfield) distToBall *= 0.4; 
 
-            let fielderSpeed = isOutfield ? 7.5 : 6.5;
+            let fielderSpeed = isOutfield ? 7.5 : 7.5;
             let actualRunTime = distToBall / fielderSpeed; 
             let stepStartOffset = 0;
 
@@ -1247,11 +1247,13 @@ if (isNetting) {
 
 else {
                     let isInf = ['p','c','1b','2b','3b','ss'].includes(activeFielderKey);
-                    let locMsg = (dest.z < fPos.z - 5) ? "키를 넘기는" : (Math.abs(dest.x - fPos.x) > 4 ? "옆에" : "앞에");
-                    let hitMsg = isInf ? `${locMsg} 떨어집니다!` : `${locMsg} 떨어지는 안타!`;
-                    if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = `${baseFielderNames[activeFielderKey]} ${hitMsg}`; } 
+                    let locMsg = result.trajectory === 'ground' ? ((dest.z < fPos.z - 5) ? "옆을 빠져나갑니다." : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어집니다." : "앞에 떨어집니다.")) : ((dest.z < fPos.z - 5) ? (isInf ? "키를 넘깁니다." : "키를 넘깁니다.") : (Math.abs(dest.x - fPos.x) > 4 ? "옆에 떨어집니다." : "앞에 떨어집니다."));
+                    let hitMsg = isInf ? locMsg : locMsg.replace("니다.", "는 안타!");
+                    let fenceZ = -160 + (Math.min(Math.abs(dest.x), 75) / 75) * 10;
+                    if (result.trajectory === 'wall' || dest.z <= fenceZ + 1.0) hitMsg = ""; 
+                    if (result.type === 'flyout') { result.type = 'single'; result.msgCatch = hitMsg ? `${baseFielderNames[activeFielderKey]} ${hitMsg}` : ""; } 
                     else if (result.type === 'foul_flyout') { result.type = 'foul_drop'; result.msgCatch = ""; } 
-                    else if (['single', 'extra'].includes(result.type)) { result.msgCatch = `${baseFielderNames[activeFielderKey]} ${hitMsg}`; }
+                    else if (['single', 'extra'].includes(result.type)) { result.msgCatch = hitMsg ? `${baseFielderNames[activeFielderKey]} ${hitMsg}` : ""; }
                 }
 
 
