@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.117</div>
+        <div class="version-text">2026-05-11 버전 1.118</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -2119,11 +2119,11 @@ function moveBackward() {
 
 function playTargetSound() {
             let noteZIdx = isLeftBatter ? (10 - pZIdx) : pZIdx; let n=60+(noteZIdx-3)+((pYIdx-2)*12); let buf=pitchBufferCache[n]; if(!buf||buf==="loading") return; let src=audioCtx.createBufferSource(); src.buffer=buf; let pan=audioCtx.createPanner();
-            pan.panningModel='HRTF'; pan.distanceModel='linear'; pan.maxDistance=25; pan.rolloffFactor=1.0; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=(2.5-pZIdx*0.5)*(isLeftBatter?-1:1);
+            pan.panningModel='HRTF'; pan.distanceModel='linear'; pan.maxDistance=25; pan.rolloffFactor=1.0; pan.channelCount=1; pan.channelCountMode="explicit"; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=(2.5-pZIdx*0.5)*(isLeftBatter?-1:1);
             audioCtx.listener.positionX.value=-18; audioCtx.listener.positionY.value=1.5; audioCtx.listener.positionZ.value=0;
             let fZ = !isLeftPitcher ? 1 : -1; if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(0,0,fZ, 0,1,0); }
-//-아래 숫자 n.n이 투수가 보는 스트라이크존 소리 크기 정하는 것임.
-            let g = audioCtx.createGain(); g.gain.value = 1.0; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
+        //-아래 숫자 n.n이 투수가 보는 스트라이크존 소리 크기 정하는 것임.
+            let g = audioCtx.createGain(); g.gain.value = 0.5; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
         }
 
 
