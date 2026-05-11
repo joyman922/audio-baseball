@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.116</div>
+        <div class="version-text">2026-05-11 버전 1.117</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -2180,7 +2180,7 @@ if (e.key === "Shift") {
             else if (e.key.toLowerCase() === "c") {
                 if (isPitching) return; 
                 isLeftBatter = !isLeftBatter; boxStep = 0; updateListenerPosition(true);
-                speak((isLeftBatter ? "좌타석" : "우타석") + ", 타석 중앙입니다.");
+                speak((isLeftBatter ? "좌타자" : "우타자"));
             }
             else if (e.key.toLowerCase() === "a") {
                 if (lastPitchSpeedMph === 0) { speak("아직 투구된 공이 없습니다."); return; }
