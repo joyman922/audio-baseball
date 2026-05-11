@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.091</div>
+        <div class="version-text">2026-05-10 버전 1.092</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -692,12 +692,12 @@ const startTime = audioCtx.currentTime + 0.05;
 
 flightPanner.positionX.setValueAtTime(startX, startTime); flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
                 let bX = endX + (startX<0? 2:-2), startZ_aud = actualZ - window.breakIdx * 0.5 * (isLeftBatter?-1:1);
-                flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime); flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime + flightTime * 0.4); 
-//-바로 위 숫자가 그것
-
-flightPanner.positionY.linearRampToValueAtTime(window.isBouncePitch ? -0.5 : 0, startTime + flightTime);
-                flightPanner.positionZ.setValueAtTime(startZ_aud, startTime); flightPanner.positionZ.setValueAtTime(startZ_aud, startTime + flightTime * 0.4); flightPanner.positionZ.linearRampToValueAtTime(actualZ, startTime + flightTime);
+                flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime); flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime + flightTime * 0.65); 
+//바로 위 숫자가 그것.
+                flightPanner.positionY.linearRampToValueAtTime(window.isBouncePitch ? -0.5 : 0, startTime + flightTime);
+                flightPanner.positionZ.setValueAtTime(startZ_aud, startTime); flightPanner.positionZ.setValueAtTime(startZ_aud, startTime + flightTime * 0.65); flightPanner.positionZ.linearRampToValueAtTime(actualZ, startTime + flightTime);
                 if(window.isBouncePitch) setTimeout(() => { if(isPitching) playBounceSound(bX, actualZ, 0); }, (flightTime*1000)-100);
+
 
 
 
@@ -705,12 +705,11 @@ flightSrc.start(startTime); flightNoiseSrc.start(startTime);
 //-구종의 소리가 변하는 부분, 퍼센테이지에 맞춰서
 
 if (flightSrc.frequency) {
-                    flightSrc.frequency.setValueAtTime(startFreq, startTime); flightSrc.frequency.setValueAtTime(startFreq, startTime + flightTime * 0.4);
-//-바로 위 숫자가 오는 곳.
-                    flightSrc.frequency.linearRampToValueAtTime(endFreq, startTime + flightTime);
+                    flightSrc.frequency.setValueAtTime(startFreq, startTime); flightSrc.frequency.setValueAtTime(startFreq, startTime + flightTime * 0.65);
+                    flightSrc.frequency.exponentialRampToValueAtTime(endFreq, startTime + flightTime);
                 } else if (flightSrc.playbackRate) {
-                    flightSrc.playbackRate.setValueAtTime(1, startTime); flightSrc.playbackRate.setValueAtTime(1, startTime + flightTime * 0.4);
-                    flightSrc.playbackRate.linearRampToValueAtTime(endFreq / startFreq, startTime + flightTime);
+                    flightSrc.playbackRate.setValueAtTime(1, startTime); flightSrc.playbackRate.setValueAtTime(1, startTime + flightTime * 0.65);
+                    flightSrc.playbackRate.exponentialRampToValueAtTime(endFreq / startFreq, startTime + flightTime);
                 }
 
 
