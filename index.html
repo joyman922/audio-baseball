@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.093</div>
+        <div class="version-text">2026-05-10 버전 1.094</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -634,19 +634,25 @@ const startTime = audioCtx.currentTime + 0.05;
                 
 
 let steps = Math.max(1, Math.max(Math.abs(window.dropY), Math.abs(window.breakIdx)));
-                window.pSrcs = []; window.pEnvs = []; window.bp = 0.4;
+                window.pSrcs = []; window.pEnvs = []; 
+                window.bp = 0.6; window.ep = 0.7; //- 60% 시작, 70% 최종 안착
                 for(let i=0; i<=steps; i++) {
+
+
                     let rNote = 60 + (Math.max(0, Math.min(10, aimZ_obj.noteIdx + Math.round(window.breakIdx*(i/steps)))) - 3) + (Math.max(0, aimY_obj.octIdx - Math.round(window.dropY*(i/steps))) - 2) * 12;
                     let s = audioCtx.createBufferSource(); s.buffer = (pitchBufferCache[rNote]!=="loading"?pitchBufferCache[rNote]:pitchBuffer) || pitchBuffer; s.loop = true;
                     window.pSrcs.push(s); window.pEnvs.push(audioCtx.createGain());
                 }
 
-let bTime = startTime + flightTime * window.bp, stepDur = (flightTime*(1-window.bp))/steps;
+let bTime = startTime + flightTime * window.bp, eTime = startTime + flightTime * window.ep;
+                let stepDur = (eTime - bTime) / steps;
                 window.pEnvs.forEach((e, i) => {
                     let tOn = i===0 ? startTime : bTime + (i-1)*stepDur, tOff = i===steps ? startTime+flightTime+0.1 : bTime + i*stepDur;
-                    e.gain.setValueAtTime(0.001, startTime); if(i>0) e.gain.setValueAtTime(0.001, Math.max(startTime, tOn - 0.05));
-                    e.gain.linearRampToValueAtTime(1.0, tOn + (i===0?0.02:0.05)); e.gain.setValueAtTime(1.0, tOff);
-                    e.gain.linearRampToValueAtTime(0.001, tOff + 0.1); e.gain.setValueAtTime(0, tOff + 0.11);
+                    e.gain.setValueAtTime(0.001, startTime); if(i>0) e.gain.setValueAtTime(0.001, tOn);
+                    e.gain.linearRampToValueAtTime(1.0, tOn + (i===0?0.02:0.02)); e.gain.setValueAtTime(1.0, tOff);
+                    e.gain.linearRampToValueAtTime(0.001, tOff + 0.02); e.gain.setValueAtTime(0, tOff + 0.03);
+                    if(i < steps) { let nR = getPianoFrequency(Math.max(0,Math.min(10,aimZ_obj.noteIdx+Math.round(window.breakIdx*((i+1)/steps)))), Math.max(0,aimY_obj.octIdx-Math.round(window.dropY*((i+1)/steps)))) / getPianoFrequency(Math.max(0,Math.min(10,aimZ_obj.noteIdx+Math.round(window.breakIdx*(i/steps)))), Math.max(0,aimY_obj.octIdx-Math.round(window.dropY*(i/steps))));
+                    window.pSrcs[i].playbackRate.setValueAtTime(1, tOff - 0.02); window.pSrcs[i].playbackRate.exponentialRampToValueAtTime(nR, tOff + 0.02); }
                 });
 
 
@@ -688,26 +694,28 @@ window.pSrcs.forEach((s, i) => { s.connect(window.pEnvs[i]); window.pEnvs[i].con
 
 
 
-//-공이 날아오는 곳 거리의 퍼센테이지에서 그대로 오다가 변하게 하는 세팅
+//-공이 날아오는 곳 거리의 퍼센테이지에서 그대로 오다가 변하게 하는 세팅. 이건 실제 괘적
 
 flightPanner.positionX.setValueAtTime(startX, startTime); flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
                 let bX = endX + (startX<0? 2:-2), startZ_aud = actualZ - window.breakIdx * 0.5 * (isLeftBatter?-1:1);
-                flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime); flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime + flightTime * 0.4); 
-//바로 위 숫자가 그것.
-                flightPanner.positionY.linearRampToValueAtTime(window.isBouncePitch ? -0.5 : 0, startTime + flightTime);
-                flightPanner.positionZ.setValueAtTime(startZ_aud, startTime); flightPanner.positionZ.setValueAtTime(startZ_aud, startTime + flightTime * 0.65); flightPanner.positionZ.linearRampToValueAtTime(actualZ, startTime + flightTime);
+                flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime); flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime + flightTime * window.bp); 
+                flightPanner.positionY.linearRampToValueAtTime(window.isBouncePitch ? -0.5 : 0, startTime + flightTime * window.ep);
+                flightPanner.positionZ.setValueAtTime(startZ_aud, startTime); flightPanner.positionZ.setValueAtTime(startZ_aud, startTime + flightTime * window.bp); flightPanner.positionZ.linearRampToValueAtTime(actualZ, startTime + flightTime * window.ep);
                 if(window.isBouncePitch) setTimeout(() => { if(isPitching) playBounceSound(bX, actualZ, 0); }, (flightTime*1000)-100);
 
 
 
 
+
 flightNoiseSrc.start(startTime); flightNoiseSrc.stop(startTime + flightTime + 0.1);
-//-구종의 소리가 변하는 부분, 퍼센테이지에 맞춰서 (다중 건반 교차 재생)
                 window.pSrcs.forEach((s, i) => {
-                    s.start(startTime); s.stop(startTime + flightTime + 0.1);
-                    activeNodes.push({ type: 'pitch', src: s, gain: window.pEnvs[i] });
+                    let tOn = i===0 ? startTime : bTime + (i-1)*stepDur;
+                    if(i > 0) { let pR = getPianoFrequency(Math.max(0,Math.min(10,aimZ_obj.noteIdx+Math.round(window.breakIdx*((i-1)/steps)))), Math.max(0,aimY_obj.octIdx-Math.round(window.dropY*((i-1)/steps)))) / getPianoFrequency(Math.max(0,Math.min(10,aimZ_obj.noteIdx+Math.round(window.breakIdx*(i/steps)))), Math.max(0,aimY_obj.octIdx-Math.round(window.dropY*(i/steps))));
+                        s.playbackRate.setValueAtTime(pR, startTime); s.playbackRate.exponentialRampToValueAtTime(1, tOn + 0.02); }
+                    s.start(startTime); s.stop(startTime + flightTime + 0.1); activeNodes.push({ type: 'pitch', src: s, gain: window.pEnvs[i] });
                 });
-                // ※ 투구 변화 시점은 위쪽 코드의 window.bp = 0.4; 숫자를 수정하시면 됩니다.
+
+
                 activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
 
                 const impactPanner = audioCtx.createPanner();
