@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.114</div>
+        <div class="version-text">2026-05-11 버전 1.115</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -242,9 +242,8 @@ let rtBallStartX = 0, rtBallStartZ = 0, rtBallEndX = 0, rtBallEndZ = 0, rtBallSt
 
 function updateListenerPosition(instant = false) {
             let currentListenerZ = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); let avatarX = gameMode === 'pitching' ? -18 : getAvatarX(); let avatarY = gameMode === 'pitching' ? 1.5 : 0;
-            let fX = gameMode === 'pitching' ? 0 : 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : -1;
+            let fX = 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : (isLeftBatter ? 1 : -1);
             if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=fX; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(fX,0,fZ, 0,1,0); }
-
 
 
 
@@ -626,7 +625,7 @@ let midiNote = 60 + (aimZ_obj.noteIdx - 3) + ((aimY_obj.octIdx - 2) * 12);
                 } catch(e) {}
             }
 
-let startX = gameMode === 'pitching' ? -18 : (!isLeftPitcher ? -18 : 18); 
+let startX = gameMode === 'pitching' ? -18 : (!isLeftBatter ? -18 : 18); 
             const now = audioCtx.currentTime;
 
             // [추가] 타격 투구 위치(마운드)에서 재생되는 와인드업 오디오 적용
@@ -744,9 +743,10 @@ window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
                 noiseEnvelope.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.1);
                 noiseEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.11);
                 
-                const flightPanner = audioCtx.createPanner();
-                flightPanner.panningModel = 'equalpower'; flightPanner.distanceModel = 'linear'; flightPanner.rolloffFactor = 1.0; flightPanner.refDistance = 1; flightPanner.maxDistance = 25; 
+const flightPanner = audioCtx.createPanner();
+                flightPanner.panningModel = 'HRTF'; flightPanner.distanceModel = 'linear'; flightPanner.rolloffFactor = 1.0; flightPanner.refDistance = 1; flightPanner.maxDistance = 25;
                 
+
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = 1.0; 
 
@@ -758,12 +758,13 @@ audioCtx.listener.positionX.value = gameMode === 'pitching' ? -18 : 0;
 
 
 
-                if(gameMode === 'pitching' && Math.random() < 0.6) { aiSwingType = ['normal','big','short'][Math.floor(Math.random()*3)]; setTimeout(() => swingBat(aiSwingType), (flightTime * 1000) * (18 / 19.5) + (Math.random() * 84 - 42)); }
+if(gameMode === 'pitching' && Math.random() < 0.6) { aiSwingType = ['normal','big','short'][Math.floor(Math.random()*3)]; setTimeout(() => swingBat(aiSwingType), (flightTime * 1000) * (18 / 19.5) + (Math.random() * 84 - 42)); }
 
 
 
-                let startX = gameMode === 'pitching' ? -18 : (!isLeftPitcher ? -18 : 18); 
-                let endX = gameMode === 'pitching' ? 1.5 : (!isLeftPitcher ? 1.5 : -1.5);
+let startX = -18; 
+                let endX = 1.5;
+
 
 
 window.pSrcs.forEach((s, i) => { s.connect(window.pEnvs[i]); window.pEnvs[i].connect(flightPanner); });
@@ -801,8 +802,9 @@ s.start(Math.max(0, tPlay - 0.005));
 
                 activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
 
-                const impactPanner = audioCtx.createPanner();
-                impactPanner.panningModel = 'equalpower'; impactPanner.distanceModel = 'linear'; impactPanner.rolloffFactor = 1.5; impactPanner.refDistance = 1; impactPanner.maxDistance = 25; 
+const impactPanner = audioCtx.createPanner();
+                impactPanner.panningModel = 'HRTF'; impactPanner.distanceModel = 'linear'; impactPanner.rolloffFactor = 1.0; impactPanner.refDistance = 1; impactPanner.maxDistance = 25;
+
                 impactPanner.positionX.value = endX; impactPanner.positionY.value = 0; impactPanner.positionZ.value = actualZ;
 
 if (isWildPitch) {
@@ -841,8 +843,9 @@ if (audioBuffers["bounce"]) {
 pitchStartTime = performance.now() + 50; 
 
 pitchTimeout = setTimeout(() => {
-                    let umpireX = !isLeftBatter ? 2.5 : -2.5; 
-                    
+                    let umpireX = 2.5;
+
+
                     if (!hasSwung) {
                         if (isBunting) {
                             playSwingSound(); 
@@ -2119,7 +2122,7 @@ function playTargetSound() {
             audioCtx.listener.positionX.value=-18; audioCtx.listener.positionY.value=1.5; audioCtx.listener.positionZ.value=0;
             let fZ = !isLeftPitcher ? 1 : -1; if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(0,0,fZ, 0,1,0); }
 //-아래 숫자 n.n이 투수가 보는 스트라이크존 소리 크기 정하는 것임.
-            let g = audioCtx.createGain(); g.gain.value = 3.0; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
+            let g = audioCtx.createGain(); g.gain.value = 2.0; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
         }
         const gameArea = document.getElementById("gameArea");
 
