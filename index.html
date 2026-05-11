@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.01010</div>
+        <div class="version-text">2026-05-11 버전 1.111</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -242,8 +242,10 @@ let rtBallStartX = 0, rtBallStartZ = 0, rtBallEndX = 0, rtBallEndZ = 0, rtBallSt
 
 function updateListenerPosition(instant = false) {
             let currentListenerZ = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); let avatarX = gameMode === 'pitching' ? (!isLeftBatter ? -18 : 18) : getAvatarX(); let avatarY = gameMode === 'pitching' ? 1.5 : 0;
-            let fX = gameMode === 'pitching' ? (!isLeftBatter?1:-1) : 0; let fZ = gameMode === 'pitching' ? 0 : -1;
+            let fX = gameMode === 'pitching' ? 0 : 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : -1;
             if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=fX; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(fX,0,fZ, 0,1,0); }
+
+
             if (instant) {
                 audioCtx.listener.positionX.setValueAtTime(avatarX, audioCtx.currentTime);
                 audioCtx.listener.positionY.setValueAtTime(avatarY, audioCtx.currentTime);
@@ -736,8 +738,11 @@ window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
 audioCtx.listener.positionX.value = gameMode === 'pitching' ? (!isLeftBatter ? -18 : 18) : 0; 
                 audioCtx.listener.positionY.value = gameMode === 'pitching' ? 1.5 : 0; 
                 audioCtx.listener.positionZ.value = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); 
-                let fX = gameMode === 'pitching' ? (!isLeftBatter?1:-1) : 0; let fZ = gameMode === 'pitching' ? 0 : -1;
+                let fX = gameMode === 'pitching' ? 0 : 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : -1;
                 if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=fX; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(fX,0,fZ, 0,1,0); }
+
+
+
                 if(gameMode === 'pitching' && Math.random() < 0.6) { aiSwingType = ['normal','big','short'][Math.floor(Math.random()*3)]; setTimeout(() => swingBat(aiSwingType), (flightTime * 1000) * (18 / 19.5) + (Math.random() * 84 - 42)); }
 
 
@@ -2092,18 +2097,21 @@ function moveBackward() {
 
 function playTargetSound() {
             let n=60+(pZIdx-3)+((pYIdx-2)*12); let buf=pitchBufferCache[n]; if(!buf||buf==="loading") return; let src=audioCtx.createBufferSource(); src.buffer=buf; let pan=audioCtx.createPanner();
-            pan.panningModel='HRTF'; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=(pZIdx-5)*0.5+(isLeftPitcher?2:-2);
+            pan.panningModel='HRTF'; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=2.5-pZIdx*0.5;
             audioCtx.listener.positionX.value=!isLeftBatter?-18:18; audioCtx.listener.positionY.value=1.5; audioCtx.listener.positionZ.value=0;
-            if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=!isLeftBatter?1:-1; audioCtx.listener.forwardZ.value=0; } else { audioCtx.listener.setOrientation(!isLeftBatter?1:-1,0,0, 0,1,0); }
+            let fZ = !isLeftPitcher ? 1 : -1; if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(0,0,fZ, 0,1,0); }
             src.connect(pan); pan.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
         }
+
 
         const gameArea = document.getElementById("gameArea");
 
 gameArea.addEventListener("keydown", function(e) {
-            if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.code) || ['c','a','q'].includes(e.key.toLowerCase()) || (e.key>='0' && e.key<='9')) { e.preventDefault(); }
+            if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.code) || ['c','a','q'].includes(e.key.toLowerCase()) || e.code.startsWith('Digit')) { e.preventDefault(); }
             const pt = [{id:'p_4seam',name:'포심'},{id:'p_2seam',name:'투심'},{id:'p_cutter',name:'커터'},{id:'p_split',name:'스플리터'},{id:'p_sinker',name:'싱커'},{id:'p_slider',name:'슬라이더'},{id:'p_curve',name:'커브'},{id:'p_fork',name:'포크볼'}];
-            if(gameMode === 'pitching' && e.key>='0' && e.key<='9') { let idx = e.key==='0'?9:parseInt(e.key)-1; if(idx<pt.length) { if(e.shiftKey) { pPitchId = pt[idx].id; speak(pt[idx].name + " 채택"); } else { speak(pt[idx].name); } } return; }
+            if(gameMode === 'pitching' && e.code.startsWith('Digit')) { let d = e.code.slice(-1); let idx = d==='0'?9:parseInt(d)-1; if(idx<pt.length) { if(e.shiftKey) { pPitchId = pt[idx].id; speak(pt[idx].name + " 채택"); } else { speak(pt[idx].name); } } return; }
+
+
             if(gameMode === 'pitching' && e.key === "Control") { speak("타자 스윙: " + (aiSwingType==='normal'?"일반":(aiSwingType==='big'?"큰 스윙":"짧은 스윙"))); return; }
             if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } if(e.code==="ArrowLeft") { pZIdx=Math.max(0,pZIdx-1); playTargetSound(); } if(e.code==="ArrowRight") { pZIdx=Math.min(10,pZIdx+1); playTargetSound(); } if(e.code==="ArrowUp") { pYIdx=Math.min(4,pYIdx+1); playTargetSound(); } if(e.code==="ArrowDown") { pYIdx=Math.max(0,pYIdx-1); playTargetSound(); } return; }
             if (e.key.toLowerCase() === 'q') { speak(currentPitchName ? currentPitchName : "아직 투구되지 않았습니다."); return; }
