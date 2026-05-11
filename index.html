@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.111</div>
+        <div class="version-text">2026-05-11 버전 1.112</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -241,9 +241,10 @@ let rtBallStartX = 0, rtBallStartZ = 0, rtBallEndX = 0, rtBallEndZ = 0, rtBallSt
         }
 
 function updateListenerPosition(instant = false) {
-            let currentListenerZ = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); let avatarX = gameMode === 'pitching' ? (!isLeftBatter ? -18 : 18) : getAvatarX(); let avatarY = gameMode === 'pitching' ? 1.5 : 0;
+            let currentListenerZ = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); let avatarX = gameMode === 'pitching' ? (!isLeftPitcher ? -18 : 18) : getAvatarX(); let avatarY = gameMode === 'pitching' ? 1.5 : 0;
             let fX = gameMode === 'pitching' ? 0 : 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : -1;
             if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=fX; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(fX,0,fZ, 0,1,0); }
+
 
 
             if (instant) {
@@ -275,14 +276,15 @@ function updateListenerPosition(instant = false) {
             }
         }
 
-        function playSwingSound() {
+function playSwingSound() {
             const r = Math.floor(Math.random() * 2) + 1;
             if (audioBuffers[`swing${r}`]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers[`swing${r}`];
-                src.connect(audioCtx.destination); src.start();
+                const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.distanceModel='linear'; p.refDistance=1; p.maxDistance=1000; p.rolloffFactor=0.05; p.channelCount=1; p.channelCountMode="explicit";
+                p.positionX.value=getAvatarX(); p.positionY.value=1.0; p.positionZ.value=isLeftBatter?-3.5:3.5;
+                src.connect(p); p.connect(masterGain); src.start();
             }
         }
-
 // [수정] 스테레오 사운드 분산 현상을 막고 타석 중앙에서 명확히 들리도록 HRTF Panner 강제 적용
         function playHitSound(isBuntHit = false, isPowerHit = false) {
             let bufferName = isBuntHit ? "bunt" : `hit${Math.floor(Math.random() * 3) + 1}`;
@@ -296,11 +298,13 @@ function updateListenerPosition(instant = false) {
             if (audioBuffers[bufferName]) {
                 const source = audioCtx.createBufferSource(); source.buffer = audioBuffers[bufferName];
                 
-                // [추가] 파워히트 사운드를 타석 중앙(0,0)에 완벽히 묶어두는 3D 음향 노드
+// [추가] 파워히트 사운드를 타석 중앙(0,0)에 완벽히 묶어두는 3D 음향 노드
                 const panner = audioCtx.createPanner();
                 panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 1000; panner.rolloffFactor = 0.05;
                 panner.channelCount = 1; panner.channelCountMode = "explicit";
-                panner.positionX.value = 0; panner.positionZ.value = 0; panner.positionY.value = 1.0; // 타자 타점 높이
+                panner.positionX.value = getAvatarX(); panner.positionZ.value = isLeftBatter ? -3.5 : 3.5; panner.positionY.value = 1.0;
+
+
 
                 const gainNode = audioCtx.createGain(); 
                 gainNode.gain.value = hitVolume;
@@ -313,12 +317,15 @@ function updateListenerPosition(instant = false) {
 
 
 
-        function playBatFoulSound() {
+function playBatFoulSound() {
             if (audioBuffers["foul1"]) {
-                const source = audioCtx.createBufferSource(); source.buffer = audioBuffers["foul1"];
-                source.connect(audioCtx.destination); source.start();
+                const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["foul1"];
+                const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.distanceModel='linear'; p.refDistance=1; p.maxDistance=1000; p.rolloffFactor=0.05; p.channelCount=1; p.channelCountMode="explicit";
+                p.positionX.value=getAvatarX(); p.positionY.value=1.0; p.positionZ.value=isLeftBatter?-3.5:3.5;
+                src.connect(p); p.connect(masterGain); src.start();
             }
         }
+
 
 // [수정] 스테레오 파일의 공간감 상실(중앙 집중)을 막기 위해 channelCount = 1 강제 적용 및 정적 좌표 할당
         function playBounceSound(x, z, timeOffset = 0) {
@@ -598,7 +605,8 @@ let isHanging = Math.random() < 0.1 && currentPitchName !== '포심';
 // [수정] 코스 및 속도를 알려주던 TTS 문구 삭제 처리
             pitchResultText = "";
 
-            let midiNote = 60 + (aimZ_obj.noteIdx - 3) + ((aimY_obj.octIdx - 2) * 12);
+
+let midiNote = 60 + (aimZ_obj.noteIdx - 3) + ((aimY_obj.octIdx - 2) * 12);
             let pitchBuffer = null;
             
             if (pitchBufferCache[midiNote] && pitchBufferCache[midiNote] !== "loading") {
@@ -606,6 +614,9 @@ let isHanging = Math.random() < 0.1 && currentPitchName !== '포심';
             } else {
                 try {
                     let response = await fetch(`./${midiNote}-2L-1.wav`);
+
+
+
                     if (response.ok) {
                         pitchBuffer = await audioCtx.decodeAudioData(await response.arrayBuffer());
                         pitchBufferCache[midiNote] = pitchBuffer; 
@@ -613,10 +624,11 @@ let isHanging = Math.random() < 0.1 && currentPitchName !== '포심';
                 } catch(e) {}
             }
 
-            let startX = !isLeftBatter ? -18 : 18; 
+let startX = !isLeftPitcher ? -18 : 18; 
             const now = audioCtx.currentTime;
 
             // [추가] 타격 투구 위치(마운드)에서 재생되는 와인드업 오디오 적용
+
             const pannerWindup = audioCtx.createPanner();
             pannerWindup.panningModel = 'HRTF'; pannerWindup.distanceModel = 'linear'; pannerWindup.refDistance = 1; pannerWindup.maxDistance = 1000; pannerWindup.rolloffFactor = 0.05;
             pannerWindup.positionX.value = startX; pannerWindup.positionZ.value = 0; pannerWindup.positionY.value = 1.5;
@@ -649,6 +661,7 @@ const startTime = audioCtx.currentTime + 0.05;
 
 
                 
+
 
 
 let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60 + (finalNoteIdx - 3) + (finalOctIdx - 2) * 12;
@@ -735,7 +748,7 @@ window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = 1.0; 
 
-audioCtx.listener.positionX.value = gameMode === 'pitching' ? (!isLeftBatter ? -18 : 18) : 0; 
+audioCtx.listener.positionX.value = gameMode === 'pitching' ? (!isLeftPitcher ? -18 : 18) : 0; 
                 audioCtx.listener.positionY.value = gameMode === 'pitching' ? 1.5 : 0; 
                 audioCtx.listener.positionZ.value = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); 
                 let fX = gameMode === 'pitching' ? 0 : 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : -1;
@@ -747,8 +760,8 @@ audioCtx.listener.positionX.value = gameMode === 'pitching' ? (!isLeftBatter ? -
 
 
 
-                let startX = !isLeftBatter ? -18 : 18; 
-                let endX = !isLeftBatter ? 1.5 : -1.5; 
+                let startX = !isLeftPitcher ? -18 : 18; 
+                let endX = !isLeftPitcher ? 1.5 : -1.5;
 
 window.pSrcs.forEach((s, i) => { s.connect(window.pEnvs[i]); window.pEnvs[i].connect(flightPanner); });
                 flightNoiseSrc.connect(noiseFilter); noiseFilter.connect(noiseEnvelope); noiseEnvelope.connect(flightPanner);
@@ -2097,12 +2110,11 @@ function moveBackward() {
 
 function playTargetSound() {
             let n=60+(pZIdx-3)+((pYIdx-2)*12); let buf=pitchBufferCache[n]; if(!buf||buf==="loading") return; let src=audioCtx.createBufferSource(); src.buffer=buf; let pan=audioCtx.createPanner();
-            pan.panningModel='HRTF'; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=2.5-pZIdx*0.5;
-            audioCtx.listener.positionX.value=!isLeftBatter?-18:18; audioCtx.listener.positionY.value=1.5; audioCtx.listener.positionZ.value=0;
+            pan.panningModel='HRTF'; pan.distanceModel='linear'; pan.maxDistance=25; pan.rolloffFactor=0.05; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=2.5-pZIdx*0.5;
+            audioCtx.listener.positionX.value=!isLeftPitcher?-18:18; audioCtx.listener.positionY.value=1.5; audioCtx.listener.positionZ.value=0;
             let fZ = !isLeftPitcher ? 1 : -1; if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(0,0,fZ, 0,1,0); }
-            src.connect(pan); pan.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
+            let g = audioCtx.createGain(); g.gain.value = 3.5; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
         }
-
 
         const gameArea = document.getElementById("gameArea");
 
@@ -2113,14 +2125,15 @@ gameArea.addEventListener("keydown", function(e) {
 
 
             if(gameMode === 'pitching' && e.key === "Control") { speak("타자 스윙: " + (aiSwingType==='normal'?"일반":(aiSwingType==='big'?"큰 스윙":"짧은 스윙"))); return; }
-            if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } if(e.code==="ArrowLeft") { pZIdx=Math.max(0,pZIdx-1); playTargetSound(); } if(e.code==="ArrowRight") { pZIdx=Math.min(10,pZIdx+1); playTargetSound(); } if(e.code==="ArrowUp") { pYIdx=Math.min(4,pYIdx+1); playTargetSound(); } if(e.code==="ArrowDown") { pYIdx=Math.max(0,pYIdx-1); playTargetSound(); } return; }
+
+if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } const yN = ["낮은 볼", "아래 스트라이크", "한가운데 스트라이크", "높은 스트라이크", "높은 볼"]; if(e.code==="ArrowLeft") { pZIdx=Math.max(0,pZIdx-1); playTargetSound(); } if(e.code==="ArrowRight") { pZIdx=Math.min(10,pZIdx+1); playTargetSound(); } if(e.code==="ArrowUp") { pYIdx=Math.min(4,pYIdx+1); playTargetSound(); if(pZIdx===5) speak(yN[pYIdx]); } if(e.code==="ArrowDown") { pYIdx=Math.max(0,pYIdx-1); playTargetSound(); if(pZIdx===5) speak(yN[pYIdx]); } return; }
+
             if (e.key.toLowerCase() === 'q') { speak(currentPitchName ? currentPitchName : "아직 투구되지 않았습니다."); return; }
 
 
 
 
-            if (e.key.toLowerCase() === 'c' && e.shiftKey) { isLeftPitcher = !isLeftPitcher; speak(isLeftPitcher ? "좌투수" : "우투수"); return; }
-
+if (e.key.toLowerCase() === 'c' && e.shiftKey) { isLeftPitcher = !isLeftPitcher; updateListenerPosition(true); speak(isLeftPitcher ? "좌투수" : "우투수"); return; }
 
 if (e.key === "Shift") {
                 if (gameMode === 'pitching') return;
