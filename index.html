@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.0104</div>
+        <div class="version-text">2026-05-10 버전 1.0105</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -675,7 +675,8 @@ if (N === 0 && i > 0) { e.gain.setValueAtTime(0, 0); } else {
 
 window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
                     if (N > 0 && i < steps) { 
-                        window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay + rT); 
+                        let bS = ['포크볼', '커브'].includes(currentPitchName) ? (tNext - rT * 3) : Math.max(tPlay, tNext - stepDur * 0.6);
+                        window.pSrcs[i].playbackRate.setValueAtTime(1.0, bS); 
                         window.pSrcs[i].playbackRate.exponentialRampToValueAtTime(Math.pow(2, dir/12), tNext); 
 }
 
