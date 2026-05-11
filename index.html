@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.0108</div>
+        <div class="version-text">2026-05-10 버전 1.0109</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -519,7 +519,10 @@ function playGloveCatchSound(x, z) {
 
 
 
-const pt = ['포심','투심','커터','스플리터','싱커','슬라이더','커브','포크볼']; currentPitchName = pt[Math.floor(Math.random() * pt.length)];
+const pt = [{id:'p_4seam',name:'포심'},{id:'p_2seam',name:'투심'},{id:'p_cutter',name:'커터'},{id:'p_split',name:'스플리터'},{id:'p_sinker',name:'싱커'},{id:'p_slider',name:'슬라이더'},{id:'p_curve',name:'커브'},{id:'p_fork',name:'포크볼'}];
+                let rndP = pt[Math.floor(Math.random() * pt.length)]; window.currentPitchId = rndP.id; currentPitchName = rndP.name;
+
+
             let pitchSpeedMph = currentPitchName==='포심'?Math.floor(Math.random()*6)+95 : currentPitchName==='싱커'?Math.floor(Math.random()*6)+90 : currentPitchName==='커브'?Math.floor(Math.random()*6)+75 : Math.floor(Math.random()*10)+85;
             lastPitchSpeedMph = pitchSpeedMph; speedToggleState = 0;
 
@@ -639,13 +642,18 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
 
 
 // 구종 모음: 포크볼, 커브, 슬라이더, 스플리터, 싱커, 포심, 투심, 커터
-                window.ep = ['포크볼', '커브'].includes(currentPitchName) ? 0.76 : 0.77;
+                window.ep = 0.75;
 
-                /* 포크볼 */ if (currentPitchName === '포크볼') window.bp = 0.76;
-                /* 커브 */ else if (currentPitchName === '커브') window.bp = 0.76;
+                if (window.currentPitchId === 'p_fork') window.bp = 0.70;
+                else if (window.currentPitchId === 'p_curve') window.bp = 0.70;
+                else if (['p_slider', 'p_sinker', 'p_split'].includes(window.currentPitchId)) window.bp = 0.45;
+                else if (['p_2seam', 'p_cutter'].includes(window.currentPitchId)) window.bp = 0.65;
+                else window.bp = 0.6;
 
-/* 슬라이더, 스플리터, 싱커, 투심, 커터 */ else if (['슬라이더', '싱커', '스플리터', '투심', '커터'].includes(currentPitchName)) window.bp = 0.60;
-                /* 포심 */ else window.bp = 0.6;
+
+
+
+
 
 
                 window.pSrcs = []; window.pEnvs = []; window.pMidis = [];
@@ -675,11 +683,14 @@ if (N === 0 && i > 0) { e.gain.setValueAtTime(0, 0); } else {
 
 //-글리산드 괘적 소리 조절
 window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
-                    if (N > 0 && i < steps) { 
-                        let bS = ['포크볼', '커브'].includes(currentPitchName) ? (tNext - rT * 3) : Math.max(bTime, tPlay);
+                    if (N > 0 && i < steps && !['p_fork', 'p_curve'].includes(window.currentPitchId)) { 
+                        let bS = Math.max(bTime, tPlay);
                         window.pSrcs[i].playbackRate.setValueAtTime(1.0, bS); 
                         window.pSrcs[i].playbackRate.exponentialRampToValueAtTime(Math.pow(2, dir/12), tNext); 
 }
+
+
+
 
 
 
