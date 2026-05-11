@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.090</div>
+        <div class="version-text">2026-05-10 버전 1.091</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -178,8 +178,12 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const zoneTop = 1.05; const zoneBottom = 0.50; 
         const zoneInside = 2.0; const zoneOutside = -2.0; // 존 4m로 개편 (0.5m 간격)
 
-        let isLeftBatter = false, isPitching = false, hasSwung = false, isBunting = false, isInPlay = false; 
-        let pitchStartTime = 0, pitchTimeout;
+
+let isLeftBatter = false, isLeftPitcher = false, isPitching = false, hasSwung = false, isBunting = false, isInPlay = false; 
+        let pitchStartTime = 0, pitchTimeout, currentPitchName = "";
+
+
+
         let currentFlightTime = 0, lastPitchSpeedMph = 0, speedToggleState = 0; 
 
 let activeNodes = [], boxStep = 0, actualY, actualZ, isStrike = false, pitchResultText = "";
@@ -513,9 +517,13 @@ function playGloveCatchSound(x, z) {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             stopAllActiveNodes(); 
 
-            let pitchSpeedMph = Math.floor(Math.random() * 16) + 85; 
-            lastPitchSpeedMph = pitchSpeedMph; 
-            speedToggleState = 0; 
+
+
+const pt = ['포심','투심','커터','스플리터','싱커','슬라이더','커브','포크볼']; currentPitchName = pt[Math.floor(Math.random() * pt.length)];
+            let pitchSpeedMph = currentPitchName==='포심'?Math.floor(Math.random()*6)+95 : currentPitchName==='싱커'?Math.floor(Math.random()*6)+90 : currentPitchName==='커브'?Math.floor(Math.random()*6)+75 : Math.floor(Math.random()*10)+85;
+            lastPitchSpeedMph = pitchSpeedMph; speedToggleState = 0;
+
+
             
             let speedMs = pitchSpeedMph * 0.44704; 
             currentFlightTime = 19.5 / speedMs; 
@@ -553,9 +561,14 @@ const targetZPool = [
 
             let errorZ = (Math.random() * 0.2) - 0.1; let errorY = (Math.random() * 0.1) - 0.05; 
             
-            actualZ = aimZ_obj.val + errorZ; 
-            if (isLeftBatter) actualZ = -actualZ; 
-            actualY = aimY_obj.val + errorY;
+
+let isHanging = Math.random() < 0.1 && currentPitchName !== '포심';
+            window.dropY = isHanging ? 0 : currentPitchName === '포크볼' ? 2 : ['커브','슬라이더','싱커','스플리터'].includes(currentPitchName) ? 1 : 0;
+            window.breakIdx = isHanging ? 0 : (isLeftPitcher?-1:1) * (currentPitchName==='슬라이더'?3 : currentPitchName==='커터'?1 : currentPitchName==='싱커'?-2 : currentPitchName==='투심'?-1 : 0);
+            let finalNoteIdx = Math.max(0, Math.min(10, aimZ_obj.noteIdx + window.breakIdx));
+            actualZ = zBases[finalNoteIdx].val + errorZ; if (isLeftBatter) actualZ = -actualZ; 
+            actualY = yBases[Math.max(0, aimY_obj.octIdx - window.dropY)].val + errorY;
+
 
             isStrike = (actualY <= zoneTop && actualY >= zoneBottom && actualZ <= zoneInside && actualZ >= zoneOutside);
             let isWildPitch = (aimZ_obj.noteIdx === 0 || aimZ_obj.noteIdx === 10); 
@@ -605,8 +618,15 @@ const targetZPool = [
             }
 
             setTimeout(() => {
-                const startTime = audioCtx.currentTime + 0.05; 
-                const targetFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
+
+
+const startTime = audioCtx.currentTime + 0.05;
+                let finalOctIdx = Math.max(0, aimY_obj.octIdx - window.dropY);
+                let finalNoteIdx = Math.max(0, Math.min(10, aimZ_obj.noteIdx + window.breakIdx));
+                window.isBouncePitch = actualY <= 0.55 && Math.random() < 0.3; 
+                const startFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
+                const endFreq = getPianoFrequency(finalNoteIdx, finalOctIdx) * (window.isBouncePitch ? 0.8 : 1.0);
+
 
 
 
@@ -667,15 +687,37 @@ const targetZPool = [
                 flightNoiseSrc.connect(noiseFilter); noiseFilter.connect(noiseEnvelope); noiseEnvelope.connect(flightPanner);
                 flightPanner.connect(flightVolNode); flightVolNode.connect(audioCtx.destination);
 
-                flightPanner.positionX.setValueAtTime(startX, startTime);
-                flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
-                flightPanner.positionY.setValueAtTime(0, startTime);
-                flightPanner.positionZ.value = actualZ; 
 
-                flightSrc.start(startTime); flightNoiseSrc.start(startTime);
-                // [수정] 0.1초 포구음 완벽 오버랩 연장
-                flightSrc.stop(startTime + flightTime + 0.1); flightNoiseSrc.stop(startTime + flightTime + 0.1); 
+//-공이 날아오는 곳 거리의 퍼센테이지에서 그대로 오다가 변하게 하는 세팅
+
+flightPanner.positionX.setValueAtTime(startX, startTime); flightPanner.positionX.linearRampToValueAtTime(endX, startTime + flightTime);
+                let bX = endX + (startX<0? 2:-2), startZ_aud = actualZ - window.breakIdx * 0.5 * (isLeftBatter?-1:1);
+                flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime); flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime + flightTime * 0.4); 
+//-바로 위 숫자가 그것
+
+flightPanner.positionY.linearRampToValueAtTime(window.isBouncePitch ? -0.5 : 0, startTime + flightTime);
+                flightPanner.positionZ.setValueAtTime(startZ_aud, startTime); flightPanner.positionZ.setValueAtTime(startZ_aud, startTime + flightTime * 0.4); flightPanner.positionZ.linearRampToValueAtTime(actualZ, startTime + flightTime);
+                if(window.isBouncePitch) setTimeout(() => { if(isPitching) playBounceSound(bX, actualZ, 0); }, (flightTime*1000)-100);
+
+
+
+flightSrc.start(startTime); flightNoiseSrc.start(startTime);
+//-구종의 소리가 변하는 부분, 퍼센테이지에 맞춰서
+
+if (flightSrc.frequency) {
+                    flightSrc.frequency.setValueAtTime(startFreq, startTime); flightSrc.frequency.setValueAtTime(startFreq, startTime + flightTime * 0.4);
+//-바로 위 숫자가 오는 곳.
+                    flightSrc.frequency.linearRampToValueAtTime(endFreq, startTime + flightTime);
+                } else if (flightSrc.playbackRate) {
+                    flightSrc.playbackRate.setValueAtTime(1, startTime); flightSrc.playbackRate.setValueAtTime(1, startTime + flightTime * 0.4);
+                    flightSrc.playbackRate.linearRampToValueAtTime(endFreq / startFreq, startTime + flightTime);
+                }
+
+
+                flightSrc.stop(startTime + flightTime + 0.1); flightNoiseSrc.stop(startTime + flightTime + 0.1);
                 
+
+
                 activeNodes.push({ type: 'pitch', src: flightSrc, gain: pianoEnvelope });
                 activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
 
@@ -683,8 +725,12 @@ const targetZPool = [
                 impactPanner.panningModel = 'equalpower'; impactPanner.distanceModel = 'linear'; impactPanner.rolloffFactor = 1.5; impactPanner.refDistance = 1; impactPanner.maxDistance = 25; 
                 impactPanner.positionX.value = endX; impactPanner.positionY.value = 0; impactPanner.positionZ.value = actualZ;
 
-                if (isWildPitch) {
+if (isWildPitch) {
+                    setTimeout(() => { if(isPitching) playBounceSound(endX + (startX<0?1:-1), actualZ, 0); }, flightTime * 1000 - 50);
                     const dirtOsc = audioCtx.createOscillator(); const dirtGain = audioCtx.createGain();
+
+
+
                     dirtOsc.type = "sine"; dirtOsc.frequency.setValueAtTime(100, startTime + flightTime);
                     dirtGain.gain.setValueAtTime(1, startTime + flightTime); dirtGain.gain.exponentialRampToValueAtTime(0.01, startTime + flightTime + 0.2);
                     dirtOsc.connect(impactPanner); impactPanner.connect(dirtGain); dirtGain.connect(audioCtx.destination);
@@ -762,10 +808,25 @@ const resolveID = (id, v) => {
                     if (id === 'S_TEX') d = (Math.random() < 0.33 ? 'S_TEX_L' : (Math.random() < 0.66 ? 'S_TEX_R' : 'S_TEX_C'));
                     if (id === 'S_OF') d = (Math.random() < 0.33 ? 'S_LF' : (Math.random() < 0.66 ? 'S_RF' : 'S_CF'));
                     if (id === 'EX') d = (Math.random() < 0.33 ? 'EX_L' : (Math.random() < 0.66 ? 'EX_R' : 'EX_C'));
-                    const m = { /* 안타 모음 */ 'HR_C':{t:'hr',d:'wall_c',tr:'fly'}, 'HR_L':{t:'hr',d:'wall_l',tr:'fly'}, 'HR_R':{t:'hr',d:'wall_r',tr:'fly'}, 'EX_C':{t:'extra',d:'wall_c',tr:'wall'}, 'EX_L':{t:'extra',d:'wall_l_deep',tr:'wall'}, 'EX_R':{t:'extra',d:'wall_r_deep',tr:'wall'}, 'S_LF':{t:'single',d:'lf',tr:'fly'}, 'S_CF':{t:'single',d:'cf',tr:'fly'}, 'S_RF':{t:'single',d:'rf',tr:'fly'}, 'S_12B':{t:'single',d:'past1b2b',tr:'line'}, 'S_2B':{t:'single',d:'past2b',tr:'line'}, 'S_TEX_L':{t:'single',d:'texas_l',tr:'fly'}, 'S_TEX_C':{t:'single',d:'texas_c',tr:'fly'}, 'S_TEX_R':{t:'single',d:'texas_r',tr:'fly'},
-                    /* 뜬공 모음 */ 'FO_LF':{t:'flyout',d:'lf',tr:'fly'}, 'FO_CF':{t:'flyout',d:'cf',tr:'fly'}, 'FO_RF':{t:'flyout',d:'rf',tr:'fly'}, 'FO_P':{t:'flyout',d:'p',tr:'fly'}, 'FC_C':{t:'foul_flyout',d:'foul_c',tr:'fly'}, 'FC_1B':{t:'foul_flyout',d:'foul_1b',tr:'fly'}, 'FC_3B':{t:'foul_flyout',d:'foul_3b',tr:'fly'},
-                    /* 땅볼 모음 */ 'GO_1B':{t:'groundout',d:'1b',tr:'ground'}, 'GO_2B':{t:'groundout',d:'2b',tr:'ground'}, 'GO_3B':{t:'groundout',d:'3b',tr:'ground'}, 'GO_SS':{t:'groundout',d:'ss',tr:'ground'}, 'GO_P':{t:'groundout',d:'p',tr:'ground'}, 'GO_12B':{t:'groundout',d:'1b2b',tr:'ground'}, 'GO_3B_D':{t:'groundout',d:'3b_deep',tr:'ground'}, 'GO_2B_D':{t:'groundout',d:'2b_deep',tr:'ground'}, 'GO_SS_D':{t:'groundout',d:'ss_deep',tr:'ground'} };
-                    let res = m[d] || m['GO_SS']; return { inPlay: true, type: res.t, dir: res.d, vel: v, msgInit: "", msgCatch: "", trajectory: res.tr };
+
+//-타구 모음
+
+
+//• t  (결과 타입): t: 'single' 은 단타, t: 'extra' 는 2루타 이상의 장타, t: 'hr' 은 홈런입니다.
+
+const m = { /* 안타 모음 */ 'HR_C':{t:'hr',d:'wall_c',tr:'fly'}, 'HR_L':{t:'hr',d:'wall_l',tr:'fly'}, 'HR_R':{t:'hr',d:'wall_r',tr:'fly'}, 'EX_C':{t:'extra',d:'wall_c',tr:'wall'}, 'EX_L':{t:'extra',d:'wall_l_deep',tr:'wall'}, 'EX_R':{t:'extra',d:'wall_r_deep',tr:'wall'}, 'S_LF':{t:'single',d:'lf',tr:'fly'}, 'S_CF':{t:'single',d:'cf',tr:'fly'}, 'S_RF':{t:'single',d:'rf',tr:'fly'}, 'S_12B':{t:'single',d:'past1b2b',tr:'line'}, 'S_2B':{t:'single',d:'past2b',tr:'line'}, 'S_TEX_L':{t:'single',d:'texas_l',tr:'fly'}, 'S_TEX_C':{t:'single',d:'texas_c',tr:'fly'}, 'S_TEX_R':{t:'single',d:'texas_r',tr:'fly'},
+
+
+//• tr  (비행 궤적): tr: 'ground' 는 땅볼, tr: 'fly' 는 뜬공, 그리고 tr: 'line' 이 바로 공이 낮고 빠르게 날아가는 라인드라이브 를 의미합니다.
+
+/* 뜬공 모음 */ 'FO_LF':{t:'flyout',d:'lf',tr:'fly'}, 'FO_CF':{t:'flyout',d:'cf',tr:'fly'}, 'FO_RF':{t:'flyout',d:'rf',tr:'fly'}, 'FO_P':{t:'flyout',d:'p',tr:'fly'}, 'FC_C':{t:'foul_flyout',d:'foul_c',tr:'fly'}, 'FC_1B':{t:'foul_flyout',d:'foul_1b',tr:'fly'}, 'FC_3B':{t:'foul_flyout',d:'foul_3b',tr:'fly'},
+
+
+/* 땅볼 모음 */ 'GO_1B':{t:'groundout',d:'1b',tr:'ground'}, 'GO_2B':{t:'groundout',d:'2b',tr:'ground'}, 'GO_3B':{t:'groundout',d:'3b',tr:'ground'}, 'GO_SS':{t:'groundout',d:'ss',tr:'ground'}, 'GO_P':{t:'groundout',d:'p',tr:'ground'}, 'GO_12B':{t:'groundout',d:'1b2b',tr:'ground'}, 'GO_3B_D':{t:'groundout',d:'3b_deep',tr:'ground'}, 'GO_2B_D':{t:'groundout',d:'2b_deep',tr:'ground'}, 'GO_SS_D':{t:'groundout',d:'ss_deep',tr:'ground'} };
+
+let res = m[d] || m['GO_SS']; return { inPlay: true, type: res.t, dir: res.d, vel: v, msgInit: "", msgCatch: "", trajectory: res.tr };
+
+
                 };
 
 
@@ -803,8 +864,15 @@ if (timeDiff <= 20) {
                     if (r < 90) return resolveID('FO_CF', getVel(80, 105));
                     return { inPlay: false, type: 'foul', msg: "커트! 파울." };
 } else if (timeDiff <= 70) { 
-                    if (r < 35) return resolveID('GO_SS_D', getVel(70, 90));
-                    if (r < 62) return resolveID('FO_LF', getVel(70, 90));
+
+
+if (r < 35) return resolveID('GO_SS', getVel(70, 90));
+
+
+
+if (r < 62) return resolveID('FO_CF', getVel(70, 90));
+
+
                     if (r < 72) return resolveID('S_TEX', getVel(70, 85));
                     if (r < 82) return { inPlay: false, type: 'foul', msg: "커트! 파울." };
                     if (r < 92) return hardHitInfield(getVel(80, 95));
@@ -822,18 +890,29 @@ if (timeDiff <= 20) {
             } 
 
 
+
+//-짧은스윙
 else if (swingType === 'short') {
                 if (timeDiff <= 40) { 
+//0~99사이, 단타
                     if (r < 30) return resolveID('S_OF', getVel(80, 95));
-                    if (r < 34) return resolveID('EX', getVel(85, 100));
-                    if (r < 54) return resolveID('FO_LF', getVel(70, 90));
+                    if (r < 50) return resolveID('EX', getVel(85, 100));
+
+
+if (r < 64) return resolveID('FO_CF', getVel(70, 90));
+
+
+
                     if (r < 84) return resolveID('GO_SS', getVel(75, 95));
                     if (r < 89) return hardHitInfield(getVel(80, 95));
                     if (r < 99) return { inPlay: false, type: 'foul', msg: "커트! 파울." };
                     return resolveID('HR', getVel(90, 100));
 
 } else if (timeDiff <= 75) { 
-                    if (r < 40) return resolveID('GO_1B', getVel(60, 80));
+
+if (r < 40) return resolveID('GO_SS', getVel(60, 80));
+
+
                     if (r < 70) return resolveID('FO_CF', getVel(60, 80));
                     if (r < 80) return resolveID('S_TEX', getVel(65, 80));
                     if (r < 85) return resolveID('EX', getVel(75, 90));
@@ -842,7 +921,11 @@ else if (swingType === 'short') {
 
 
 if (r < 65) return { inPlay: false, type: 'foul', msg: "커트! 파울." }; 
-                    return resolveID('GO_12B', getVel(50, 75));
+
+
+return resolveID('GO_SS', getVel(50, 75));
+
+
                 }
                 return { inPlay: false, type: 'miss', msg: "헛스윙!" };
 
@@ -853,17 +936,28 @@ if (r < 65) return { inPlay: false, type: 'foul', msg: "커트! 파울." };
 
 else { 
                 if (timeDiff <= 25) { 
-                    if (r < 20) return resolveID('S_12B', getVel(85, 105));
+
+if (r < 20) return resolveID('S_OF', getVel(85, 105));
+
+
                     if (r < 40) return resolveID('EX', getVel(90, 110));
                     if (r < 45) return resolveID('HR', getVel(95, 110));
                     if (r < 65) return resolveID('FO_CF', getVel(75, 95));
                     if (r < 70) return hardHitInfield(getVel(90, 105));
-                    if (r < 90) return resolveID('GO_3B_D', getVel(80, 100));
+
+if (r < 90) return resolveID('GO_SS', getVel(80, 100));
+
+
                     return { inPlay: false, type: 'foul', msg: "커트! 파울." };
 
 } else if (timeDiff <= 55) { 
-                    if (r < 40) return resolveID('GO_2B', getVel(60, 85));
-                    if (r < 70) return resolveID('FO_RF', getVel(60, 85));
+
+if (r < 40) return resolveID('GO_SS', getVel(60, 85));
+
+
+if (r < 70) return resolveID('FO_CF', getVel(60, 85));
+
+
                     if (r < 75) return hardHitInfield(getVel(75, 90));
                     if (r < 85) return resolveID('S_TEX', getVel(70, 85));
                     if (r < 88) return resolveID('EX', getVel(80, 95));
@@ -871,8 +965,13 @@ else {
                     return { inPlay: false, type: 'foul', msg: "커트! 파울." };
 
 } else if (timeDiff <= 70) {
-                    if (r < 40) return resolveID('GO_2B', getVel(60, 85));
-                    if (r < 70) return resolveID('FO_RF', getVel(60, 85));
+
+
+if (r < 40) return resolveID('GO_SS', getVel(60, 85));
+
+if (r < 70) return resolveID('FO_CF', getVel(60, 85));
+
+
                     if (r < 75) return hardHitInfield(getVel(75, 90));
                     if (r < 85) return resolveID('S_TEX', getVel(70, 85));
                     if (r < 88) return resolveID('EX', getVel(80, 95));
@@ -1141,9 +1240,11 @@ let fX = activeDef.x; let fZ = activeDef.z; let cF = activeDef.fielder; let roll
                     if (roll < 0.50) { result.type = 'flyout'; result.isDivingCatch = true; result.diver = cF; dest = { x: fX, z: fZ }; result.msgCatch = "나이스 캐치! 잡았습니다!"; } 
                     else if (roll < 0.70) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ + (Math.random() * 4 + 6) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 앞에 떨어집니다!`; result.type = 'single'; } 
                     else if (roll < 0.80) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 4 + 6), z: fZ - (Math.random() * 5 + 10) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 뒤로 굴절!`; result.type = 'single'; } 
-                    else if (roll < 0.90) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 5 + 10), z: Math.max(fenceLimit(dest.x), fZ - (activeDef.isInf ? (Math.random() * 20 + 40) : (Math.random() * 20 + 20))) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 완전히 빠집니다!`; result.type = 'extra'; } 
+                    else if (roll < 0.90) { result.isDeflected = true; result.isDivingMiss = true; result.diver = cF; dest = { x: fX + (Math.random() < 0.5 ? 1 : -1) * (Math.random() * 5 + 10), z: Math.max(fenceLimit(dest.x), fZ - (cF === 'p' ? (Math.random() * 20 + 60) : (activeDef.isInf ? (Math.random() * 20 + 40) : (Math.random() * 20 + 20)))) }; result.msgDeflect = `${baseFielderNames[cF]} 글러브 맞고 완전히 빠집니다!`; result.type = 'extra'; } 
                     else { result.isDivingMiss = true; result.diver = cF; result.msgDeflect = "몸을 날렸으나 공이 그대로 빠져나갑니다!"; }
                 }
+
+
 
             }
 
@@ -1934,12 +2035,13 @@ else if (result.inPlay) {
 
         const gameArea = document.getElementById("gameArea");
 
-        gameArea.addEventListener("keydown", function(e) {
-            if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.code) || e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'a') {
-                e.preventDefault(); 
-            }
-            
+gameArea.addEventListener("keydown", function(e) {
+            if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.code) || ['c','a','q'].includes(e.key.toLowerCase())) { e.preventDefault(); }
+            if (e.key.toLowerCase() === 'q') { speak(currentPitchName ? currentPitchName : "아직 투구되지 않았습니다."); return; }
+            if (e.key.toLowerCase() === 'c' && e.shiftKey) { isLeftPitcher = !isLeftPitcher; speak(isLeftPitcher ? "좌투수" : "우투수"); return; }
             if (e.key === "Shift") {
+
+
                 if (currentSwingMode !== 'normal') {
                     currentSwingMode = 'normal'; speak("스윙 취소. 일반 스윙");
                 } else {
