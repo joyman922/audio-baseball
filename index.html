@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.115</div>
+        <div class="version-text">2026-05-11 버전 1.116</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -625,12 +625,14 @@ let midiNote = 60 + (aimZ_obj.noteIdx - 3) + ((aimY_obj.octIdx - 2) * 12);
                 } catch(e) {}
             }
 
-let startX = gameMode === 'pitching' ? -18 : (!isLeftBatter ? -18 : 18); 
+let startX = -18; 
             const now = audioCtx.currentTime;
 
             // [추가] 타격 투구 위치(마운드)에서 재생되는 와인드업 오디오 적용
 
             const pannerWindup = audioCtx.createPanner();
+
+
             pannerWindup.panningModel = 'HRTF'; pannerWindup.distanceModel = 'linear'; pannerWindup.refDistance = 1; pannerWindup.maxDistance = 1000; pannerWindup.rolloffFactor = 0.05;
             pannerWindup.positionX.value = startX; pannerWindup.positionZ.value = 0; pannerWindup.positionY.value = 1.5;
 
@@ -753,18 +755,17 @@ const flightPanner = audioCtx.createPanner();
 audioCtx.listener.positionX.value = gameMode === 'pitching' ? -18 : 0; 
                 audioCtx.listener.positionY.value = gameMode === 'pitching' ? 1.5 : 0; 
                 audioCtx.listener.positionZ.value = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); 
-                let fX = gameMode === 'pitching' ? 0 : 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : -1;
+                let fX = 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : (isLeftBatter ? 1 : -1);
                 if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=fX; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(fX,0,fZ, 0,1,0); }
 
 
 
-if(gameMode === 'pitching' && Math.random() < 0.6) { aiSwingType = ['normal','big','short'][Math.floor(Math.random()*3)]; setTimeout(() => swingBat(aiSwingType), (flightTime * 1000) * (18 / 19.5) + (Math.random() * 84 - 42)); }
+                if(gameMode === 'pitching' && Math.random() < 0.6) { aiSwingType = ['normal','big','short'][Math.floor(Math.random()*3)]; setTimeout(() => swingBat(aiSwingType), (flightTime * 1000) * (18 / 19.5) + (Math.random() * 84 - 42)); }
 
 
 
-let startX = -18; 
+                let startX = -18; 
                 let endX = 1.5;
-
 
 
 window.pSrcs.forEach((s, i) => { s.connect(window.pEnvs[i]); window.pEnvs[i].connect(flightPanner); });
@@ -2118,12 +2119,15 @@ function moveBackward() {
 
 function playTargetSound() {
             let noteZIdx = isLeftBatter ? (10 - pZIdx) : pZIdx; let n=60+(noteZIdx-3)+((pYIdx-2)*12); let buf=pitchBufferCache[n]; if(!buf||buf==="loading") return; let src=audioCtx.createBufferSource(); src.buffer=buf; let pan=audioCtx.createPanner();
-            pan.panningModel='HRTF'; pan.distanceModel='linear'; pan.maxDistance=25; pan.rolloffFactor=1.0; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=2.5-pZIdx*0.5;
+            pan.panningModel='HRTF'; pan.distanceModel='linear'; pan.maxDistance=25; pan.rolloffFactor=1.0; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=(2.5-pZIdx*0.5)*(isLeftBatter?-1:1);
             audioCtx.listener.positionX.value=-18; audioCtx.listener.positionY.value=1.5; audioCtx.listener.positionZ.value=0;
             let fZ = !isLeftPitcher ? 1 : -1; if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(0,0,fZ, 0,1,0); }
 //-아래 숫자 n.n이 투수가 보는 스트라이크존 소리 크기 정하는 것임.
-            let g = audioCtx.createGain(); g.gain.value = 2.0; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
+            let g = audioCtx.createGain(); g.gain.value = 1.0; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
         }
+
+
+
         const gameArea = document.getElementById("gameArea");
 
 gameArea.addEventListener("keydown", function(e) {
