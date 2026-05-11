@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.112</div>
+        <div class="version-text">2026-05-11 버전 1.113</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -1514,10 +1514,10 @@ let backPen = (dest.z < fPos.z - 3) ? 1.0 : 0.0;
             }
 
 let targetListenerZ = dest.z > 0 ? dest.z + 5 : Math.min(15, dest.z + 15);
-            audioCtx.listener.positionX.setValueAtTime(0, now);
-            audioCtx.listener.positionY.setValueAtTime(0, now);
-            audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
-            if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=-1; } else { audioCtx.listener.setOrientation(0,0,-1, 0,1,0); }
+            let cx = gameMode === 'pitching' ? (!isLeftPitcher ? -18 : 18) : 0; let cy = gameMode === 'pitching' ? 1.5 : 0;
+            audioCtx.listener.positionX.setValueAtTime(cx, now); audioCtx.listener.positionY.setValueAtTime(cy, now); audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
+            audioCtx.listener.positionX.setValueAtTime(0, now + 0.2); audioCtx.listener.positionY.setValueAtTime(0, now + 0.2); audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now + 0.2);
+            setTimeout(() => { if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=-1; } else { audioCtx.listener.setOrientation(0,0,-1, 0,1,0); } }, 200);
             audioCtx.listener.positionZ.linearRampToValueAtTime(targetListenerZ, now + flightTime + chaseTime);
 
 
@@ -2113,7 +2113,8 @@ function playTargetSound() {
             pan.panningModel='HRTF'; pan.distanceModel='linear'; pan.maxDistance=25; pan.rolloffFactor=0.05; pan.positionX.value=0; pan.positionY.value=pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))); pan.positionZ.value=2.5-pZIdx*0.5;
             audioCtx.listener.positionX.value=!isLeftPitcher?-18:18; audioCtx.listener.positionY.value=1.5; audioCtx.listener.positionZ.value=0;
             let fZ = !isLeftPitcher ? 1 : -1; if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=0; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(0,0,fZ, 0,1,0); }
-            let g = audioCtx.createGain(); g.gain.value = 3.5; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
+//-아래 숫자 n.n이 투수가 보는 스트라이크존 소리 크기 정하는 것임.
+            let g = audioCtx.createGain(); g.gain.value = 1.5; src.connect(pan); pan.connect(g); g.connect(masterGain); src.start(); src.stop(audioCtx.currentTime+0.5);
         }
 
         const gameArea = document.getElementById("gameArea");
@@ -2126,7 +2127,8 @@ gameArea.addEventListener("keydown", function(e) {
 
             if(gameMode === 'pitching' && e.key === "Control") { speak("타자 스윙: " + (aiSwingType==='normal'?"일반":(aiSwingType==='big'?"큰 스윙":"짧은 스윙"))); return; }
 
-if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } const yN = ["낮은 볼", "아래 스트라이크", "한가운데 스트라이크", "높은 스트라이크", "높은 볼"]; if(e.code==="ArrowLeft") { pZIdx=Math.max(0,pZIdx-1); playTargetSound(); } if(e.code==="ArrowRight") { pZIdx=Math.min(10,pZIdx+1); playTargetSound(); } if(e.code==="ArrowUp") { pYIdx=Math.min(4,pYIdx+1); playTargetSound(); if(pZIdx===5) speak(yN[pYIdx]); } if(e.code==="ArrowDown") { pYIdx=Math.max(0,pYIdx-1); playTargetSound(); if(pZIdx===5) speak(yN[pYIdx]); } return; }
+if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } const yN = ["낮은 볼", "아래 스트라이크", "한가운데 스트라이크", "높은 스트라이크", "높은 볼"]; if(e.code==="ArrowLeft") pZIdx=Math.max(0,pZIdx-1); if(e.code==="ArrowRight") pZIdx=Math.min(10,pZIdx+1); if(e.code==="ArrowUp") pYIdx=Math.min(4,pYIdx+1); if(e.code==="ArrowDown") pYIdx=Math.max(0,pYIdx-1); playTargetSound(); if(pZIdx===5) speak(yN[pYIdx]); return; }
+
 
             if (e.key.toLowerCase() === 'q') { speak(currentPitchName ? currentPitchName : "아직 투구되지 않았습니다."); return; }
 
