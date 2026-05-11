@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.096</div>
+        <div class="version-text">2026-05-10 버전 1.097</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -645,17 +645,16 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
                     window.pSrcs.push(s); window.pEnvs.push(audioCtx.createGain()); window.pMidis.push(rNote); window.pBases.push(bNote);
                 }
 
-let bTime = startTime + flightTime * window.bp, eTime = startTime + flightTime * window.ep;
-                let stepDur = (eTime - bTime) / steps; window.cf = Math.min(0.02, stepDur * 0.5);
+let bTime = startTime + flightTime * window.bp, eTime = startTime + flightTime * window.ep, stepDur = (eTime - bTime) / steps;
                 window.pEnvs.forEach((e, i) => {
-                    let tOn = i===0 ? startTime : bTime + (i-1)*stepDur, tOff = i===steps ? startTime+flightTime+0.1 : bTime + i*stepDur;
-                    e.gain.setValueAtTime(0.001, startTime); if(i>0) e.gain.setValueAtTime(0.001, tOn);
-                    e.gain.linearRampToValueAtTime(1.0, tOn + (i===0?0.02:window.cf)); e.gain.setValueAtTime(1.0, tOff);
-                    e.gain.linearRampToValueAtTime(0.001, tOff + window.cf); e.gain.setValueAtTime(0, tOff + window.cf + 0.01);
-                    if(i < steps) { let nR = Math.pow(2, (window.pMidis[i+1] - window.pMidis[i]) / 12), bR = Math.pow(2, (window.pMidis[i]-window.pBases[i])/12);
-                    window.pSrcs[i].playbackRate.setValueAtTime(bR, Math.max(0, tOff - window.cf)); window.pSrcs[i].playbackRate.exponentialRampToValueAtTime(bR*nR, tOff + window.cf); }
+                    let tPlay = i===0 ? startTime : bTime + i*stepDur, tEnd = bTime + (i+1)*stepDur, atk = Math.min(0.005, stepDur*0.5);
+                    e.gain.setValueAtTime(0.001, Math.max(0, tPlay-0.001)); e.gain.linearRampToValueAtTime(1.0, tPlay + atk);
+                    if (i < steps) { e.gain.setValueAtTime(1.0, tEnd); e.gain.linearRampToValueAtTime(0.001, tEnd + 0.015); e.gain.setValueAtTime(0, tEnd + 0.02); }
+                    else { e.gain.setValueAtTime(1.0, startTime+flightTime); e.gain.linearRampToValueAtTime(0.001, startTime+flightTime+0.05); }
+                    let bR = Math.pow(2, (window.pMidis[i]-window.pBases[i])/12); window.pSrcs[i].playbackRate.setValueAtTime(bR, tPlay);
+                    if (i === 0) { window.pSrcs[i].playbackRate.setValueAtTime(bR, bTime); window.pSrcs[i].playbackRate.exponentialRampToValueAtTime(bR * Math.pow(2, (window.pMidis[1]-window.pMidis[0])/12), tEnd); }
+                    else if (i < steps) { window.pSrcs[i].playbackRate.exponentialRampToValueAtTime(bR * Math.pow(2, (window.pMidis[i+1]-window.pMidis[i])/12), tEnd); }
                 });
-
 
                 let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25); 
                 let noisePeakVol = 0.06 + ((pitchSpeedMph - 80) * 0.015); 
@@ -710,11 +709,9 @@ flightPanner.positionX.setValueAtTime(startX, startTime); flightPanner.positionX
 
 flightNoiseSrc.start(startTime); flightNoiseSrc.stop(startTime + flightTime + 0.1);
                 window.pSrcs.forEach((s, i) => {
-                    let tOn = i===0 ? startTime : bTime + (i-1)*stepDur, bR = Math.pow(2, (window.pMidis[i]-window.pBases[i])/12);
-                    if(i > 0) { let pR = Math.pow(2, (window.pMidis[i-1] - window.pMidis[i]) / 12);
-                        s.playbackRate.setValueAtTime(bR*pR, startTime); s.playbackRate.exponentialRampToValueAtTime(bR, tOn + window.cf); }
-                    else { s.playbackRate.setValueAtTime(bR, startTime); }
-                    s.start(startTime); s.stop(startTime + flightTime + 0.1); activeNodes.push({ type: 'pitch', src: s, gain: window.pEnvs[i] });
+                    let tPlay = i === 0 ? startTime : bTime + i * stepDur;
+                    s.start(tPlay); s.stop(startTime + flightTime + 0.2);
+                    activeNodes.push({ type: 'pitch', src: s, gain: window.pEnvs[i] });
                 });
 
 
