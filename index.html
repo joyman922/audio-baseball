@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.0102</div>
+        <div class="version-text">2026-05-10 버전 1.0103</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -640,8 +640,8 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
 
 // 구종 모음: 포크볼, 커브, 슬라이더, 스플리터, 싱커, 포심, 투심, 커터
                 window.ep = ['포크볼', '커브'].includes(currentPitchName) ? 0.70 : 0.75;
-                /* 포크볼 */ if (currentPitchName === '포크볼') window.bp = 0.50;
-                /* 커브 */ else if (currentPitchName === '커브') window.bp = 0.45;
+                /* 포크볼 */ if (currentPitchName === '포크볼') window.bp = 0.60;
+                /* 커브 */ else if (currentPitchName === '커브') window.bp = 0.60;
 
 /* 슬라이더, 스플리터, 싱커, 투심, 커터 */ else if (['슬라이더', '싱커', '스플리터', '투심', '커터'].includes(currentPitchName)) window.bp = 0.45;
                 /* 포심 */ else window.bp = 0.6;
@@ -737,9 +737,11 @@ flightPanner.positionX.setValueAtTime(startX, startTime); flightPanner.positionX
 flightNoiseSrc.start(startTime); flightNoiseSrc.stop(startTime + flightTime + 0.1);
                 window.pSrcs.forEach((s, i) => {
                     let tPlay = i===0 ? startTime : bTime + i*stepDur, tNext = bTime + (i+1)*stepDur, overlap = Math.max(0.03, stepDur * 1.5);
-                    s.start(Math.max(0, tPlay - 0.005));
-                    if(i < steps) { s.stop(tNext + overlap + 0.05); } else { s.stop(startTime + flightTime + 0.1); }
-                    activeNodes.push({ type: 'pitch', src: s, gain: window.pEnvs[i] });
+
+s.start(Math.max(0, tPlay - 0.005));
+                        if(i < steps && N > 0) { s.stop(tNext + overlap + 0.05); } else { s.stop(startTime + flightTime + 0.1); }
+                        activeNodes.push({ type: 'pitch', src: s, gain: window.pEnvs[i] });
+
                 });
 
                 activeNodes.push({ type: 'pitch', src: flightNoiseSrc, gain: noiseEnvelope });
