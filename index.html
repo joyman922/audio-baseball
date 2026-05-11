@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-10 버전 1.0107</div>
+        <div class="version-text">2026-05-10 버전 1.0108</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -639,12 +639,12 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
 
 
 // 구종 모음: 포크볼, 커브, 슬라이더, 스플리터, 싱커, 포심, 투심, 커터
-                window.ep = ['포크볼', '커브'].includes(currentPitchName) ? 0.76 : 0.80;
+                window.ep = ['포크볼', '커브'].includes(currentPitchName) ? 0.76 : 0.77;
 
                 /* 포크볼 */ if (currentPitchName === '포크볼') window.bp = 0.76;
                 /* 커브 */ else if (currentPitchName === '커브') window.bp = 0.76;
 
-/* 슬라이더, 스플리터, 싱커, 투심, 커터 */ else if (['슬라이더', '싱커', '스플리터', '투심', '커터'].includes(currentPitchName)) window.bp = 0.50;
+/* 슬라이더, 스플리터, 싱커, 투심, 커터 */ else if (['슬라이더', '싱커', '스플리터', '투심', '커터'].includes(currentPitchName)) window.bp = 0.60;
                 /* 포심 */ else window.bp = 0.6;
 
 
@@ -676,10 +676,12 @@ if (N === 0 && i > 0) { e.gain.setValueAtTime(0, 0); } else {
 //-글리산드 괘적 소리 조절
 window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
                     if (N > 0 && i < steps) { 
-                        let bS = ['포크볼', '커브'].includes(currentPitchName) ? (tNext - rT * 3) : Math.max(tPlay, tNext - stepDur * 0.2);
+                        let bS = ['포크볼', '커브'].includes(currentPitchName) ? (tNext - rT * 3) : Math.max(bTime, tPlay);
                         window.pSrcs[i].playbackRate.setValueAtTime(1.0, bS); 
                         window.pSrcs[i].playbackRate.exponentialRampToValueAtTime(Math.pow(2, dir/12), tNext); 
 }
+
+
 
                 });
 
