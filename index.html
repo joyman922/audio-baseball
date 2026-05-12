@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.122</div>
+        <div class="version-text">2026-05-11 버전 1.123</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -700,12 +700,12 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
 
 
 //- 구종 모음: 포크볼, 커브, 슬라이더, 스플리터, 싱커, 포심, 투심, 커터
-                window.ep = 0.70;
+                window.ep = 0.65;
 
-                if (window.currentPitchId === 'p_fork') window.bp = 0.60;
-                else if (window.currentPitchId === 'p_curve') window.bp = 0.60;
+                if (window.currentPitchId === 'p_fork') window.bp = 0.50;
+                else if (window.currentPitchId === 'p_curve') window.bp = 0.50;
                 else if (['p_slider', 'p_sinker', 'p_split'].includes(window.currentPitchId)) window.bp = 0.45;
-                else if (['p_2seam', 'p_cutter'].includes(window.currentPitchId)) window.bp = 0.60;
+                else if (['p_2seam', 'p_cutter'].includes(window.currentPitchId)) window.bp = 0.50;
                 else window.bp = 0.6;
 
 
@@ -754,9 +754,9 @@ window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
 
                 });
 
-                let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25);
+let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25);
 
-                let noisePeakVol = 0.06 + ((pitchSpeedMph - 80) * 0.015); 
+                let noisePeakVol = Math.max(0.03, 0.06 + ((pitchSpeedMph - 80) * 0.015));
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
                 flightNoiseSrc.buffer = noiseBuffer; 
