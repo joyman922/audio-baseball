@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.120</div>
+        <div class="version-text">2026-05-11 버전 1.121</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -199,7 +199,7 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const baseFrequencies = [220.00, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00];
         function getPianoFrequency(noteIndex, octaveIndex) { return baseFrequencies[noteIndex] * Math.pow(2, octaveIndex - 2); }
 
-const zoneTop = 1.05; const 오zoneBottom = 0.50; 
+const zoneTop = 1.05; const zoneBottom = 0.50; 
         const zoneInside = 1.6; const zoneOutside = -1.6; // 존 4m로 개편 (0.5m 간격)
 
 
@@ -617,8 +617,8 @@ let finalNoteIdx = Math.max(0, Math.min(10, aimZ_obj.noteIdx + window.breakIdx))
             actualY = yBases[Math.max(0, aimY_obj.octIdx - window.dropY)].val + errorY;
 
 
-            isStrike = (actualY <= zoneTop && actualY >= zoneBottom && actualZ <= zoneInside && actualZ >= zoneOutside);
-            let isWildPitch = (finalNoteIdx === 10); window.speakName = ["몸에 맞는 공", "몸쪽 살짝 빠진 볼", "몸쪽 스트라이크", "몸쪽 스트라이크", "몸쪽 스트라이크", "몸쪽 스트라이크", "가운데", "바깥쪽 스트라이크", "바깥쪽 스트라이크", "바깥쪽 살짝 빠진 볼", "폭투"][finalNoteIdx];
+isStrike = (actualY <= zoneTop && actualY >= zoneBottom && actualZ <= zoneInside && actualZ >= zoneOutside);
+            let isWildPitch = (finalNoteIdx === 10);
 
             let locStr = "";
 
@@ -881,9 +881,9 @@ if (!hasSwung) {
                             playUmpireSound('strike', umpireX, 0);
                             speak("번트 자세를 빼지 않아 스윙 처리됩니다.");
                             isBunting = false; 
-                        } else {
+
+} else {
                             playUmpireSound(isStrike ? 'strike' : 'ball', umpireX, 0);
-                            if (window.speakName) setTimeout(() => speak(window.speakName), 500);
                         }
                     } else if (window.isMissedSwing) {
 
@@ -2169,8 +2169,7 @@ gameArea.addEventListener("keydown", function(e) {
 
             if(gameMode === 'pitching' && e.key === "Control") { speak("타자 스윙: " + (aiSwingType==='normal'?"일반":(aiSwingType==='big'?"큰 스윙":"짧은 스윙"))); return; }
 
-if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } const yN = ["가장 낮은", "낮은", "가운데", "높은", "가장 높은"]; if(e.code==="ArrowLeft") pZIdx=Math.min(10,pZIdx+1); if(e.code==="ArrowRight") pZIdx=Math.max(0,pZIdx-1); if(e.code==="ArrowUp") pYIdx=Math.min(4,pYIdx+1); if(e.code==="ArrowDown") pYIdx=Math.max(0,pYIdx-1); playTargetSound(); if(pZIdx===5) speak(yN[pYIdx]); return; }
-
+if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } const yN = ["가장 낮은", "낮은", "가운데", "높은", "가장 높은"]; const zN = ["몸에 맞는 공", "몸쪽 살짝 빠지는 볼", "몸쪽 걸치는", "몸쪽 꽉찬", "살짝 몸쪽", "가운데", "살짝 바깥쪽", "바깥쪽 꽉찬", "바깥쪽 걸치는", "바깥쪽 살짝 빠지는 볼", "폭투"]; if(e.code==="ArrowLeft") pZIdx=Math.min(10,pZIdx+1); if(e.code==="ArrowRight") pZIdx=Math.max(0,pZIdx-1); if(e.code==="ArrowUp") pYIdx=Math.min(4,pYIdx+1); if(e.code==="ArrowDown") pYIdx=Math.max(0,pYIdx-1); playTargetSound(); let tZ = isLeftBatter ? 10-pZIdx : pZIdx; let isS = pYIdx>=1 && pYIdx<=3 && tZ>=2 && tZ<=8; let isB = !isS && tZ!==0 && tZ!==10 && !zN[tZ].includes("볼"); let endS = isS ? " 스트라이크" : (isB ? " 볼" : ""); speak((pYIdx===2 && tZ===5 ? "한가운데" : yN[pYIdx] + " " + zN[tZ]) + endS); return; }
 
             if (e.key.toLowerCase() === 'q') { speak(currentPitchName ? currentPitchName : "아직 투구되지 않았습니다."); return; }
 
