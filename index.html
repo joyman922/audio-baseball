@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.123</div>
+        <div class="version-text">2026-05-11 버전 1.124</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -266,10 +266,10 @@ function updateListenerPosition(instant = false) {
             let currentListenerZ = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); let avatarX = gameMode === 'pitching' ? -18 : getAvatarX(); let avatarY = gameMode === 'pitching' ? 1.5 : 0;
             let fX = 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : (isLeftBatter ? 1 : -1);
             if(audioCtx.listener.forwardX) { audioCtx.listener.forwardX.value=fX; audioCtx.listener.forwardZ.value=fZ; } else { audioCtx.listener.setOrientation(fX,0,fZ, 0,1,0); }
-
-
-
+            audioCtx.listener.positionX.cancelScheduledValues(0); audioCtx.listener.positionY.cancelScheduledValues(0); audioCtx.listener.positionZ.cancelScheduledValues(0);
             if (instant) {
+
+
                 audioCtx.listener.positionX.setValueAtTime(avatarX, audioCtx.currentTime);
                 audioCtx.listener.positionY.setValueAtTime(avatarY, audioCtx.currentTime);
                 audioCtx.listener.positionZ.setValueAtTime(currentListenerZ, audioCtx.currentTime);
@@ -286,11 +286,13 @@ function updateListenerPosition(instant = false) {
 
         }
 
-        function playWalkSound() {
+function playWalkSound() {
             const panner = audioCtx.createPanner();
             panner.panningModel = 'equalpower'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 25;
-            panner.positionX.value = getAvatarX(); panner.positionY.value = 0; panner.positionZ.value = isLeftBatter ? -3.5 : 3.5; 
+            panner.positionX.value = getAvatarX(); panner.positionY.value = 0; panner.positionZ.value = isLeftBatter ? -3.4 : 3.4; 
             const walkGain = audioCtx.createGain(); walkGain.gain.value = 0.5;
+
+
 
             if (audioBuffers["walk1"]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers["walk1"];
@@ -300,12 +302,14 @@ function updateListenerPosition(instant = false) {
 
 function playSwingSound() {
             const r = Math.floor(Math.random() * 2) + 1;
-            if (audioBuffers[`swing${r}`]) {
+
+if (audioBuffers[`swing${r}`]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers[`swing${r}`];
                 const p = audioCtx.createPanner(); p.panningModel='HRTF'; p.distanceModel='linear'; p.refDistance=1; p.maxDistance=1000; p.rolloffFactor=0.05; p.channelCount=1; p.channelCountMode="explicit";
-                p.positionX.value=getAvatarX(); p.positionY.value=1.0; p.positionZ.value=isLeftBatter?-3.5:3.5;
+                p.positionX.value=getAvatarX(); p.positionY.value=1.0; p.positionZ.value=isLeftBatter?-3.4:3.4;
                 src.connect(p); p.connect(masterGain); src.start();
             }
+
         }
 // [수정] 스테레오 사운드 분산 현상을 막고 타석 중앙에서 명확히 들리도록 HRTF Panner 강제 적용
         function playHitSound(isBuntHit = false, isPowerHit = false) {
@@ -809,10 +813,10 @@ flightPanner.positionX.setValueAtTime(startX, startTime); flightPanner.positionX
                 flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime); flightPanner.positionY.setValueAtTime(window.dropY>0 ? 1.5 : 0, startTime + flightTime * window.bp);
 
 
-flightPanner.positionY.linearRampToValueAtTime(window.isBouncePitch ? -0.5 : 0, startTime + flightTime * window.ep);
+flightPanner.positionY.linearRampToValueAtTime(window.isBouncePitch ? -0.5 : 0, startTime + flightTime * (window.isBouncePitch ? 0.92 : window.ep));
                 let pArmZ = isLeftPitcher ? 0.8 : -0.8;
                 flightPanner.positionZ.setValueAtTime(pArmZ, startTime); flightPanner.positionZ.linearRampToValueAtTime(startZ_aud, startTime + flightTime * window.bp); flightPanner.positionZ.linearRampToValueAtTime(actualZ, startTime + flightTime * window.ep);
-                if(window.isBouncePitch) setTimeout(() => { if(isPitching) playBounceSound(bX, actualZ, 0); }, (flightTime*1000)-100);
+                if(window.isBouncePitch) setTimeout(() => { if(isPitching) playBounceSound(bX, actualZ, 0); }, flightTime * 0.92 * 1000);
 
 
 
@@ -2072,16 +2076,20 @@ if (isPitching && pitchStartTime === 0) {
                 return;
             }
 
-            hasSwung = true; 
+hasSwung = true; 
             if (isBunting) isBunting = false; 
 
             const swingTime = now - pitchStartTime;
             let audioHitX = getAvatarX();
             let distanceToBatter = isLeftBatter ? (18 - audioHitX) : (18 + audioHitX);
             const perfectTime = (currentFlightTime * 1000) * (distanceToBatter / 19.5); 
+            if (swingTime >= currentFlightTime * 1000 - 15) { playSwingSound(); window.isMissedSwing = true; return; }
             const timeDiff = Math.abs(swingTime - perfectTime);
             
             if (!isStrike) {
+
+
+
                 playSwingSound(); 
                 window.isMissedSwing = true; // [수정] 볼 스윙
                 return; 
