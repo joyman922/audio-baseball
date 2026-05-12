@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.124</div>
+        <div class="version-text">2026-05-11 버전 1.125</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -682,14 +682,16 @@ let startX = -18;
 
 
 const startTime = audioCtx.currentTime + 0.05;
-                let finalOctIdx = Math.max(0, aimY_obj.octIdx - window.dropY);
+
+let finalOctIdx = Math.max(0, aimY_obj.octIdx - window.dropY);
                 let finalNoteIdx = Math.max(0, Math.min(10, aimZ_obj.noteIdx + window.breakIdx));
-                window.isBouncePitch = (finalNoteIdx === 10) || (actualY <= 0.55 && Math.random() < 0.3); 
+                window.isBouncePitch = (finalNoteIdx === 10) || (finalOctIdx === 0 && Math.random() < 0.3); 
                 const startFreq = getPianoFrequency(aimZ_obj.noteIdx, aimY_obj.octIdx);
 
 
 
                 const endFreq = getPianoFrequency(finalNoteIdx, finalOctIdx) * (window.isBouncePitch ? 0.8 : 1.0);
+
 
 
 
@@ -760,9 +762,11 @@ window.pSrcs[i].playbackRate.setValueAtTime(1.0, tPlay);
 
 let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25);
 
-                let noisePeakVol = Math.max(0.03, 0.06 + ((pitchSpeedMph - 80) * 0.015));
+                let noisePeakVol = Math.max(0.1, 0.12 + ((pitchSpeedMph - 80) * 0.01));
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
+
+
                 flightNoiseSrc.buffer = noiseBuffer; 
                 flightNoiseSrc.loop = true; 
                 
@@ -784,7 +788,8 @@ const flightPanner = audioCtx.createPanner();
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = 1.0; 
 
-audioCtx.listener.positionX.value = gameMode === 'pitching' ? -18 : 0; 
+if (gameMode === 'pitching' && Math.random() < 0.3) { boxStep = Math.floor(Math.random() * 5) - 2; playWalkSound(); }
+                audioCtx.listener.positionX.value = gameMode === 'pitching' ? -18 : getAvatarX(); 
                 audioCtx.listener.positionY.value = gameMode === 'pitching' ? 1.5 : 0; 
                 audioCtx.listener.positionZ.value = gameMode === 'pitching' ? 0 : (isLeftBatter ? -3.5 : 3.5); 
                 let fX = 0; let fZ = gameMode === 'pitching' ? (!isLeftPitcher ? 1 : -1) : (isLeftBatter ? 1 : -1);
@@ -1556,7 +1561,7 @@ let backPen = (dest.z < fPos.z - 3) ? 1.0 : 0.0;
             }
 
 let targetListenerZ = dest.z > 0 ? dest.z + 5 : Math.min(15, dest.z + 15);
-            let cx = gameMode === 'pitching' ? -18 : 0; let cy = gameMode === 'pitching' ? 1.5 : 0;
+            let cx = gameMode === 'pitching' ? -18 : getAvatarX(); let cy = gameMode === 'pitching' ? 1.5 : 0;
             audioCtx.listener.positionX.setValueAtTime(cx, now); audioCtx.listener.positionY.setValueAtTime(cy, now); audioCtx.listener.positionZ.setValueAtTime(audioCtx.listener.positionZ.value, now);
 
 
