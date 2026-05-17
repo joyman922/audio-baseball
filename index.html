@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-17 버전 1.139</div>
+        <div class="version-text">2026-05-17 버전 1.140</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -799,7 +799,7 @@ if (window.currentPitchId === 'p_split' && window.ep !== 1.0) {
 
 //- 구종의 바람소리 두번째 문장의 첫 숫자는 전체의 최소값, 그 다음의 숫자는 80마일의 최소값 소리. 첫 문장의 첫 숫자는 가장 작은 단위, 뒤 숫자 15는 떨어지는 폭
 let noiseBaseFreq = Math.max(250, 300 + ((pitchSpeedMph - 80) * 15));
-                let noisePeakVol = Math.max(0.1, 0.12 + ((pitchSpeedMph - 80) * 0.01));
+                let noisePeakVol = Math.max(0.2, 0.22 + ((pitchSpeedMph - 80) * 0.01));
 
                 const flightNoiseSrc = audioCtx.createBufferSource();
 
