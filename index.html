@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-17 버전 1.131</div>
+        <div class="version-text">2026-05-17 버전 1.132</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -812,8 +812,9 @@ let noiseBaseFreq = 300 + ((pitchSpeedMph - 80) * 25);
                 noiseEnvelope.gain.setValueAtTime(0, startTime + flightTime + 0.11);
                 
 const flightPanner = audioCtx.createPanner();
-                flightPanner.panningModel = 'HRTF'; flightPanner.distanceModel = 'linear'; flightPanner.rolloffFactor = 1.0; flightPanner.refDistance = 1; flightPanner.maxDistance = 25;
-                
+flightPanner.panningModel = 'equalpower'; flightPanner.channelCount = 1; flightPanner.channelCountMode = "explicit";
+flightPanner.distanceModel = 'linear'; flightPanner.rolloffFactor = 1.0; flightPanner.refDistance = 1; flightPanner.maxDistance = 25;                
+
 
                 const flightVolNode = audioCtx.createGain();
                 flightVolNode.gain.value = 1.0; 
