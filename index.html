@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-11 버전 1.128</div>
+        <div class="version-text">2026-05-17 버전 1.130</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -200,7 +200,7 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function getPianoFrequency(noteIndex, octaveIndex) { return baseFrequencies[noteIndex] * Math.pow(2, octaveIndex - 2); }
 
 const zoneTop = 1.05; const zoneBottom = 0.50; 
-        const zoneInside = 1.6; const zoneOutside = -1.6; // 존 4m로 개편 (0.5m 간격)
+const zoneInside = 1.1; const zoneOutside = -1.1; // C(1.0) ~ E(-1.0) 존으로 타이트하게 축소
 
 
 let isLeftBatter = false, isLeftPitcher = false, isPitching = false, hasSwung = false, isBunting = false, isInPlay = false; 
@@ -562,12 +562,10 @@ function playGloveCatchSound(x, z) {
 
 
 
-const pt = [{id:'p_4seam',name:'포심'},{id:'p_2seam',name:'투심'},{id:'p_cutter',name:'커터'},{id:'p_split',name:'스플리터'},{id:'p_sinker',name:'싱커'},{id:'p_slider',name:'슬라이더'},{id:'p_curve',name:'커브'},{id:'p_fork',name:'포크볼'}];
-                let rndP = gameMode === 'pitching' ? pt.find(p=>p.id===pPitchId) : pt[Math.floor(Math.random() * pt.length)]; window.currentPitchId = rndP.id; currentPitchName = rndP.name;
+const pt = [{id:'p_4seam',name:'포심'},{id:'p_sinker',name:'싱커'},{id:'p_cutter',name:'커터'},{id:'p_sweeper',name:'스위퍼'},{id:'p_slider',name:'슬라이더'},{id:'p_slurve',name:'슬러브'},{id:'p_curve',name:'커브'},{id:'p_knucklecurve',name:'너클커브'},{id:'p_changeup',name:'체인지업'},{id:'p_split',name:'스플리터'}];
+let rndP = gameMode === 'pitching' ? pt.find(p=>p.id===pPitchId) : pt[Math.floor(Math.random() * pt.length)]; window.currentPitchId = rndP.id; currentPitchName = rndP.name;
+let pitchSpeedMph = currentPitchName==='포심'?Math.floor(Math.random()*6)+95 : ['싱커','스플리터'].includes(currentPitchName)?Math.floor(Math.random()*6)+90 : ['커브','체인지업'].includes(currentPitchName)?Math.floor(Math.random()*6)+80 : Math.floor(Math.random()*8)+85;
 
-
-
-            let pitchSpeedMph = currentPitchName==='포심'?Math.floor(Math.random()*6)+95 : currentPitchName==='싱커'?Math.floor(Math.random()*6)+90 : currentPitchName==='커브'?Math.floor(Math.random()*6)+75 : Math.floor(Math.random()*10)+85;
             lastPitchSpeedMph = pitchSpeedMph; speedToggleState = 0;
 
 
@@ -611,9 +609,23 @@ let aimZ_obj = gameMode === 'pitching' ? {val: 2.5 - noteZIdx * 0.5, noteIdx: no
             let errorZ = (Math.random() * 0.2) - 0.1; let errorY = (Math.random() * 0.1) - 0.05; 
             
 
-let isHanging = Math.random() < 0.1 && currentPitchName !== '포심';
-            window.dropY = isHanging ? 0 : currentPitchName === '포크볼' ? 2 : ['커브','슬라이더','싱커','스플리터'].includes(currentPitchName) ? 1 : 0;
-            window.breakIdx = isHanging ? 0 : (isLeftPitcher?-1:1) * (isLeftBatter?-1:1) * (currentPitchName==='슬라이더'?3 : currentPitchName==='커터'?1 : currentPitchName==='싱커'?-2 : currentPitchName==='투심'?-1 : 0);
+window.isHanging = Math.random() < 0.1 && currentPitchName !== '포심';
+window.dropY = window.isHanging ? 0 : ['커브','체인지업','너클커브','슬러브'].includes(currentPitchName) ? 2 : ['슬라이더','싱커','스플리터'].includes(currentPitchName) ? 1 : 0;
+let bD = 0, r = Math.random();
+
+//-구종별 휘어지는 변화
+if (currentPitchName==='스위퍼') bD = 2 + Math.floor(r * 3); else if (['슬라이더','슬러브'].includes(currentPitchName)) bD = r<0.5 ? 1 : 2;
+
+
+else if (['체인지업','싱커'].includes(currentPitchName)) bD = -(1 + Math.floor(r*3)); 
+else if (currentPitchName==='커터') bD = 1; else if (['커브','너클커브'].includes(currentPitchName)) bD = r<0.3 ? -1 : 0;
+
+
+
+window.breakIdx = window.isHanging ? 0 : (isLeftPitcher?-1:1) * (isLeftBatter?-1:1) * bD;
+
+
+
 
 
 let finalNoteIdx = Math.max(0, Math.min(10, aimZ_obj.noteIdx + window.breakIdx));
@@ -705,14 +717,21 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
                 let N = Math.abs(eMidi - sMidi), dir = eMidi > sMidi ? 1 : -1, steps = Math.max(1, N);
 
 
-//- 구종 모음: 포크볼, 커브, 슬라이더, 스플리터, 싱커, 포심, 투심, 커터
-                window.ep = 0.60;
+// [마스터 방정식: 구종별 목표 글리산도 시간(T_target) 세팅]
+// t_target 변수 숫자(초)를 조절하시면 구종의 휘어지는 속도가 변합니다.
+let t_target = 0; 
+if (['p_cutter'].includes(window.currentPitchId)) t_target = 0.04; // 짧고 예리하게
+else if (['p_sweeper'].includes(window.currentPitchId)) t_target = 0.05;
+else if (['p_slider', 'p_slurve', 'p_knucklecurve', 'p_sinker'].includes(window.currentPitchId)) t_target = 0.08; // 묵직하게
+else if (['p_changeup'].includes(window.currentPitchId)) t_target = 0.12;
+else if (['p_curve'].includes(window.currentPitchId)) t_target = 0.15; // 길고 거대하게
 
-                if (window.currentPitchId === 'p_fork') window.bp = 0.55;
-                else if (window.currentPitchId === 'p_curve') window.bp = 0.50;
-                else if (['p_slider', 'p_sinker', 'p_split'].includes(window.currentPitchId)) window.bp = 0.35;
-                else if (['p_2seam', 'p_cutter'].includes(window.currentPitchId)) window.bp = 0.45;
-                else window.bp = 0.6;
+window.ep = 0.60; // 도착 지점은 무조건 60%로 고정
+// bp 계산: 60% 지점에서 목표 시간만큼 역산하여 시작 퍼센테이지 당기기
+window.bp = window.currentPitchId === 'p_split' ? 0.55 : Math.max(0.1, window.ep - (t_target / flightTime));
+
+// [10% 실투 완벽 동기화] 물리 궤적(isHanging)과 소리의 일직선 여부를 하나로 통일
+if (window.currentPitchId === 'p_4seam' || window.isHanging) { window.ep = 1.0; window.bp = 1.0; }
 
 
 
@@ -720,8 +739,47 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
 
 
 
-                window.pSrcs = []; window.pEnvs = []; window.pMidis = [];
-                for(let i=0; i<=steps; i++) {
+
+let bTime = startTime + flightTime * window.bp, eTime = startTime + flightTime * window.ep, stepDur = (eTime - bTime) / steps;
+let overlap = Math.max(0.005, stepDur * 1.5); // 음과 음 사이의 매끄러운 연결을 위해 페이드 오버랩 살짝 증가
+
+window.pSrcs = []; window.pEnvs = []; window.pMidis = [];
+
+if (window.currentPitchId === 'p_split' && window.ep !== 1.0) {
+    // [스플리터 예외 적용] 12개음을 치지 않고, 55%에서 시작음 죽이고 60%에서 도착음 확 살림
+    let s1 = audioCtx.createBufferSource(); s1.buffer = pitchBufferCache[sMidi] || pitchBuffer; s1.loop = true;
+    let g1 = audioCtx.createGain(); g1.gain.setValueAtTime(1.0, startTime);
+    g1.gain.setValueAtTime(1.0, startTime + flightTime * 0.55); g1.gain.linearRampToValueAtTime(0.001, startTime + flightTime * 0.60);
+    
+    let s2 = audioCtx.createBufferSource(); s2.buffer = pitchBufferCache[eMidi] || pitchBuffer; s2.loop = true;
+    let g2 = audioCtx.createGain(); g2.gain.setValueAtTime(0.001, startTime);
+    g2.gain.setValueAtTime(0.001, startTime + flightTime * 0.55); g2.gain.linearRampToValueAtTime(1.0, startTime + flightTime * 0.60);
+    
+    window.pSrcs.push(s1, s2); window.pEnvs.push(g1, g2); window.pMidis.push(sMidi, eMidi); steps = 1;
+} else {
+    // [기타 구종] 지정된 건반 파일들을 순서대로 불러오며 피치 슬라이드(글리산도) 적용
+    for(let i=0; i<=steps; i++) {
+        let rNote = N === 0 ? sMidi : sMidi + (i * dir), s = audioCtx.createBufferSource();
+        s.buffer = pitchBufferCache[rNote] || pitchBuffer; s.loop = true;
+        let e = audioCtx.createGain();
+        
+        let tPlay = i===0 ? startTime : bTime + i*stepDur, tNext = bTime + (i+1)*stepDur, rT = Math.min(0.005, stepDur/2.1);
+        if (N === 0 && i > 0) { e.gain.setValueAtTime(0, 0); } else {
+            e.gain.setValueAtTime(0.001, Math.max(0, tPlay - rT)); e.gain.linearRampToValueAtTime(1.0, tPlay + rT);
+            if (i < steps && N > 0) { e.gain.setValueAtTime(1.0, Math.max(tPlay+rT, tNext)); e.gain.linearRampToValueAtTime(0.001, tNext + overlap); e.gain.setValueAtTime(0, tNext + overlap + 0.01); }
+            else { e.gain.setValueAtTime(1.0, startTime + flightTime); e.gain.linearRampToValueAtTime(0.001, startTime + flightTime + 0.05); } 
+        }
+        
+        s.playbackRate.setValueAtTime(1.0, tPlay);
+        if (N > 0 && i < steps) { 
+            s.playbackRate.setValueAtTime(1.0, Math.max(bTime, tPlay)); 
+            s.playbackRate.exponentialRampToValueAtTime(Math.pow(2, dir/12), tNext); 
+        }
+        window.pSrcs.push(s); window.pEnvs.push(e); window.pMidis.push(rNote);
+    }
+}
+
+
                     let rNote = N === 0 ? sMidi : sMidi + (i * dir), s = audioCtx.createBufferSource();
                     s.buffer = pitchBufferCache[rNote] || pitchBuffer; s.loop = true;
                     window.pSrcs.push(s); window.pEnvs.push(audioCtx.createGain()); window.pMidis.push(rNote);
@@ -2176,13 +2234,41 @@ function playTargetSound() {
 
 gameArea.addEventListener("keydown", function(e) {
             if(["Space", "Enter", "ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"].includes(e.code) || ['c','a','q'].includes(e.key.toLowerCase()) || e.code.startsWith('Digit')) { e.preventDefault(); }
-            const pt = [{id:'p_4seam',name:'포심'},{id:'p_2seam',name:'투심'},{id:'p_cutter',name:'커터'},{id:'p_split',name:'스플리터'},{id:'p_sinker',name:'싱커'},{id:'p_slider',name:'슬라이더'},{id:'p_curve',name:'커브'},{id:'p_fork',name:'포크볼'}];
-            if(gameMode === 'pitching' && e.code.startsWith('Digit')) { let d = e.code.slice(-1); let idx = d==='0'?9:parseInt(d)-1; if(idx<pt.length) { if(e.shiftKey) { pPitchId = pt[idx].id; speak(pt[idx].name + " 채택"); } else { speak(pt[idx].name); } } return; }
+
+const pt = [{id:'p_4seam',name:'포심'},{id:'p_sinker',name:'싱커'},{id:'p_cutter',name:'커터'},{id:'p_sweeper',name:'스위퍼'},{id:'p_slider',name:'슬라이더'},{id:'p_slurve',name:'슬러브'},{id:'p_curve',name:'커브'},{id:'p_knucklecurve',name:'너클커브'},{id:'p_changeup',name:'체인지업'},{id:'p_split',name:'스플리터'}];
+if(gameMode === 'pitching' && e.code.startsWith('Digit')) { let d = e.code.slice(-1); let idx = d==='0'?9:parseInt(d)-1; if(idx<pt.length) { if(e.shiftKey) { pPitchId = pt[idx].id; speak(pt[idx].name + " 채택"); } else { speak(pt[idx].name); } } return; }
+
 
 
             if(gameMode === 'pitching' && e.key === "Control") { speak("타자 스윙: " + (aiSwingType==='normal'?"일반":(aiSwingType==='big'?"큰 스윙":"짧은 스윙"))); return; }
 
-if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } const yN = ["가장 낮은", "낮은", "가운데", "높은", "가장 높은"]; const zN = ["몸에 맞는 공", "몸쪽 살짝 빠지는 볼", "몸쪽 걸치는", "몸쪽 꽉찬", "살짝 몸쪽", "가운데", "살짝 바깥쪽", "바깥쪽 꽉찬", "바깥쪽 걸치는", "바깥쪽 살짝 빠지는 볼", "폭투"]; if(e.code==="ArrowLeft") pZIdx=Math.min(10,pZIdx+1); if(e.code==="ArrowRight") pZIdx=Math.max(0,pZIdx-1); if(e.code==="ArrowUp") pYIdx=Math.min(4,pYIdx+1); if(e.code==="ArrowDown") pYIdx=Math.max(0,pYIdx-1); playTargetSound(); let tZ = isLeftBatter ? 10-pZIdx : pZIdx; let isS = pYIdx>=1 && pYIdx<=3 && tZ>=2 && tZ<=8; let isB = !isS && tZ!==0 && tZ!==10 && !zN[tZ].includes("볼"); let endS = isS ? " 스트라이크" : (isB ? " 볼" : ""); speak((pYIdx===2 && tZ===5 ? "한가운데" : yN[pYIdx] + " " + zN[tZ]) + endS); return; }
+if(gameMode === 'pitching' && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space","Enter"].includes(e.code)) { 
+    if(isPitching) return; if(e.code === "Space") { playTargetSound(); return; } if(e.code === "Enter") { throwBall(true); return; } 
+    const yN = ["가장 낮은", "낮은", "가운데", "높은", "가장 높은"]; 
+    if(e.code==="ArrowLeft") pZIdx=Math.min(10,pZIdx+1); if(e.code==="ArrowRight") pZIdx=Math.max(0,pZIdx-1); if(e.code==="ArrowUp") pYIdx=Math.min(4,pYIdx+1); if(e.code==="ArrowDown") pYIdx=Math.max(0,pYIdx-1); 
+    playTargetSound(); let tZ = isLeftBatter ? 10-pZIdx : pZIdx; 
+    
+    // [새로운 스트라이크 존 및 명칭 매핑 (C~E 존 적용)]
+    let zName = "";
+    if (tZ === 0) zName = (pYIdx === 4) ? "헤드샷" : "몸에 맞는 볼";
+    else if (tZ === 1) zName = "몸쪽 많이 벗어난 볼";
+    else if (tZ === 2) zName = "몸쪽 살짝 빠지는 볼";
+    else if (tZ === 3) zName = "몸쪽 깊은 스트라이크"; // C
+    else if (tZ === 4) zName = "몸쪽 스트라이크"; // C#
+    else if (tZ === 5) zName = "가운데 스트라이크"; // D
+    else if (tZ === 6) zName = "바깥쪽 스트라이크"; // D#
+    else if (tZ === 7) zName = "바깥쪽 깊은 스트라이크"; // E
+    else if (tZ === 8) zName = "바깥쪽 살짝 빠지는 볼";
+    else if (tZ === 9) zName = "바깥쪽 많이 벗어난 볼";
+    else if (tZ === 10) zName = "폭투";
+    
+    let isS = tZ >= 3 && tZ <= 7 && pYIdx >= 1 && pYIdx <= 3; 
+    let endS = isS ? "" : (tZ===0 || tZ===10 ? "" : " (볼)");
+    speak((pYIdx===2 && tZ===5 ? "정중앙 스트라이크" : yN[pYIdx] + " " + zName) + endS); 
+    return; 
+}
+
+
 
             if (e.key.toLowerCase() === 'q') { speak(currentPitchName ? currentPitchName : "아직 투구되지 않았습니다."); return; }
 
