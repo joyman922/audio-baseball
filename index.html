@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-17 버전 1.145</div>
+        <div class="version-text">2026-05-17 버전 1.146</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -609,9 +609,11 @@ const targetZPool = [
                 ...Array(4).fill(yBases[3]), ...Array(1).fill(yBases[4])
             ];
 
-let noteZIdx = isLeftBatter ? (10 - pZIdx) : pZIdx;
-let aimZ_obj = gameMode === 'pitching' ? {val: 2.5 - noteZIdx * 0.5, noteIdx: noteZIdx} : targetZPool[Math.floor(Math.random() * targetZPool.length)];
-            let aimY_obj = gameMode === 'pitching' ? {val: pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))), octIdx: pYIdx} : targetYPool[Math.floor(Math.random() * targetYPool.length)];
+let noteZIdx = isLeftBatter ? (10 - pZIdx) : pZIdx, isAS = Math.random() < 0.8;
+let aimZ_obj = gameMode === 'pitching' ? {val: 2.5 - noteZIdx * 0.5, noteIdx: noteZIdx} : zBases[isAS ? 3 + Math.floor(Math.random()*5) : [0,1,2,8,9,10][Math.floor(Math.random()*6)]];
+let aimY_obj = gameMode === 'pitching' ? {val: pYIdx===0?0.1:(pYIdx===1?0.55:(pYIdx===2?0.75:(pYIdx===3?0.95:1.4))), octIdx: pYIdx} : yBases[isAS ? 1 + Math.floor(Math.random()*3) : [0,4][Math.floor(Math.random()*2)]];
+
+
 
 
             let errorZ = (Math.random() * 0.2) - 0.1; let errorY = (Math.random() * 0.1) - 0.05; 
