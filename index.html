@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-17 버전 1.130</div>
+        <div class="version-text">2026-05-17 버전 1.131</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -564,7 +564,8 @@ function playGloveCatchSound(x, z) {
 
 const pt = [{id:'p_4seam',name:'포심'},{id:'p_sinker',name:'싱커'},{id:'p_cutter',name:'커터'},{id:'p_sweeper',name:'스위퍼'},{id:'p_slider',name:'슬라이더'},{id:'p_slurve',name:'슬러브'},{id:'p_curve',name:'커브'},{id:'p_knucklecurve',name:'너클커브'},{id:'p_changeup',name:'체인지업'},{id:'p_split',name:'스플리터'}];
 let rndP = gameMode === 'pitching' ? pt.find(p=>p.id===pPitchId) : pt[Math.floor(Math.random() * pt.length)]; window.currentPitchId = rndP.id; currentPitchName = rndP.name;
-let pitchSpeedMph = currentPitchName==='포심'?Math.floor(Math.random()*6)+95 : ['싱커','스플리터'].includes(currentPitchName)?Math.floor(Math.random()*6)+90 : ['커브','체인지업'].includes(currentPitchName)?Math.floor(Math.random()*6)+80 : Math.floor(Math.random()*8)+85;
+
+let pitchSpeedMph = ['포심','싱커','스플리터','커터'].includes(currentPitchName) ? Math.floor(Math.random()*6)+90 : ['슬라이더'].includes(currentPitchName) ? Math.floor(Math.random()*6)+85 : ['스위퍼','슬러브'].includes(currentPitchName) ? Math.floor(Math.random()*6)+80 : ['너클커브'].includes(currentPitchName) ? Math.floor(Math.random()*5)+76 : Math.floor(Math.random()*6)+70;
 
             lastPitchSpeedMph = pitchSpeedMph; speedToggleState = 0;
 
@@ -720,8 +721,11 @@ let sMidi = 60 + (aimZ_obj.noteIdx - 3) + (aimY_obj.octIdx - 2) * 12, eMidi = 60
 // [마스터 방정식: 구종별 목표 글리산도 시간(T_target) 세팅]
 // t_target 변수 숫자(초)를 조절하시면 구종의 휘어지는 속도가 변합니다.
 let t_target = 0; 
-if (['p_cutter'].includes(window.currentPitchId)) t_target = 0.04; // 짧고 예리하게
-else if (['p_sweeper'].includes(window.currentPitchId)) t_target = 0.05;
+
+if (['p_cutter'].includes(window.currentPitchId)) t_target = 0.05; 
+else if (['p_sweeper'].includes(window.currentPitchId)) t_target = 0.06;
+
+
 else if (['p_slider', 'p_slurve', 'p_knucklecurve', 'p_sinker'].includes(window.currentPitchId)) t_target = 0.08; // 묵직하게
 else if (['p_changeup'].includes(window.currentPitchId)) t_target = 0.12;
 else if (['p_curve'].includes(window.currentPitchId)) t_target = 0.15; // 길고 거대하게
