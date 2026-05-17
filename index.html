@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-17 버전 1.140</div>
+        <div class="version-text">2026-05-17 버전 1.141</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -375,7 +375,7 @@ function playBatFoulSound() {
 function playUmpireSound(type, x, z) {
             const panner = audioCtx.createPanner();
 //-심판 거리감 소리, 첫 숫자가 소리가 0이 되는 최대 거리, 뒤 숫자가 거리에 따라 줄어드는 가속도
-            panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 30; panner.rolloffFactor = 1.0;
+            panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.refDistance = 1; panner.maxDistance = 50; panner.rolloffFactor = 1.0;
 
 
 
