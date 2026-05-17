@@ -32,7 +32,7 @@
         <button id="btnGoVolume">3. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-17 버전 1.133</div>
+        <div class="version-text">2026-05-17 버전 1.134</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -391,7 +391,8 @@ function playUmpireSound(type, x, z) {
 
             if (audioBuffers[bufferName]) {
                 const src = audioCtx.createBufferSource(); src.buffer = audioBuffers[bufferName];
-                const gain = audioCtx.createGain(); gain.gain.value = 1.5; 
+//- 아래 숫자가 심판 소리
+                const gain = audioCtx.createGain(); gain.gain.value = 0.9; 
                 src.connect(panner); panner.connect(gain); gain.connect(audioCtx.destination); src.start();
             }
         }
@@ -821,7 +822,7 @@ flightPanner.distanceModel = 'linear'; flightPanner.rolloffFactor = 1.0; flightP
 
 
 const flightVolNode = audioCtx.createGain();
-                flightVolNode.gain.value = 2.5; // 공 날아오는 소리를 2.5배 뻥튀기하여 명확하게 복구
+                flightVolNode.gain.value = 1.5; //- 공 날아오는 소리를 1.5배 뻥튀기하여 명확하게 복구
 
 if (gameMode === 'pitching' && Math.random() < 0.3) { boxStep = Math.floor(Math.random() * 5) - 2; playWalkSound(); }
                 audioCtx.listener.positionX.value = gameMode === 'pitching' ? -18 : getAvatarX(); 
