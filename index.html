@@ -26,13 +26,16 @@
 
 <div id="mainMenuScreen" class="screen active">
         <h1>오디오 베이스볼</h1>
-        <button id="btnGoSinglePlayer">1. 개인 플레이</button>
-        <button id="btnGoHelp">2. 도움말</button>
 
-        <button id="btnGoVolume">3. 소리 설정</button>
+<button id="btnGoSinglePlayer">1. 개인 플레이</button>
+        <button id="btnGoGacha">2. 카드 뽑기</button>
+        <button id="btnGoInventory">3. 보관함</button>
+        <button id="btnGoHelp">4. 도움말</button>
+        <button id="btnGoVolume">5. 소리 설정</button>
 
 
-        <div class="version-text">2026-05-17 버전 1.146</div>
+
+        <div class="version-text">2026-05-17 버전 1.148</div>
     </div>
 
     <div id="volumeScreen" class="screen">
@@ -49,9 +52,13 @@
     <div id="singlePlayerScreen" class="screen">
         <h1>개인 플레이</h1>
         <button id="btnBattingPractice">1. 타격 연습</button>
-        <button id="btnPitchingPractice">2. 투구 연습</button>
+
+<button id="btnPitchingPractice">2. 투구 연습</button>
         <button id="btnPracticeMatch">3. 연습경기</button>
+        <button id="btnRegularMatch">4. 정규이닝 플레이</button>
         <button id="btnBackToMain">뒤로가기</button>
+
+
     </div>
 
 <div id="practiceMatchScreen" class="screen">
@@ -67,11 +74,25 @@
         <label for="gameArea">야구 게임 컨트롤 창</label>
         <textarea id="gameArea" readonly aria-label="타격 연습창"></textarea>
         <div>
-            <button id="btnExitGame">나가기</button>
+
+<button id="btnExitGame">나가기</button>
         </div>
     </div>
 
+
+<div id="gachaScreen" class="screen"><h1>카드 뽑기</h1><div id="gachaStep1"><button id="btnDrawTeamMenu">1. 특정 팀 뽑기</button><button id="btnDrawAllMenu">2. 전체 구단 뽑기</button></div><div id="gachaStepLeague" style="display:none;"><h2>리그 선택</h2><button id="btnGachaAL">아메리칸 리그</button><button id="btnGachaNL">내셔널 리그</button></div><div id="gachaStepTeam" style="display:none;"><h2 id="gachaDrawTitle">팀 선택</h2><select id="gachaTeamSelect" size="10" style="font-size:18px; width:100%; margin-bottom:10px;"></select><div id="gachaTeamBtnGroup" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;"></div></div><div id="gachaStepDraw" style="display:none;"><h2 id="gachaTargetText"></h2><button id="btnDrawPitcher">투수 뽑기</button><button id="btnDrawBatter">타자 뽑기</button><button id="btnDrawAny">전체 수비수 뽑기</button></div><button id="btnBackFromGacha">뒤로가기</button></div>
+    <div id="inventoryScreen" class="screen"><h1>보관함</h1><p id="invStatus">불러오는 중...</p><div id="invPageButtons" style="margin-bottom:10px; display:flex; gap:10px; align-items:center;"></div><div style="display:flex; gap:10px; margin-bottom:10px;"><select id="invSelect" size="10" style="flex:1; font-size:18px;"></select><div id="invBtnContainer" style="flex:1; display:flex; flex-direction:column; gap:5px; overflow-y:auto; max-height:250px;"></div></div><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><button id="btnInvPrev">이전 25명</button><button id="btnInvNext">다음 25명</button></div><button id="btnInvRemoveRoster">선택 카드 로스터 제외</button><button id="btnBackFromInv">뒤로가기</button></div>
+    <div id="teamSelectScreen" class="screen"><h1>나의 구단 창단 (최초 1회)</h1><div id="teamLeagueGroup"><button id="btnLeagueAL">아메리칸 리그</button><button id="btnLeagueNL">내셔널 리그</button></div><div id="teamListGroup" style="display:none;"><h2 id="teamLeagueTitle"></h2><select id="teamSelect" size="10" style="font-size:18px; width:100%; margin-bottom:10px;"></select><div id="teamBtnGroup" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px;"></div><button id="btnConfirmTeam">선택한 팀으로 창단 (스타터팩 자동 지급)</button></div><button id="btnBackFromTeam">뒤로가기</button></div>
+
+<div id="regularPlayScreen" class="screen"><h1>페넌트레이스 (정규 시즌)</h1><button id="btnRegFull">1. 풀 시즌 (162경기)</button><button id="btnRegHalf">2. 하프 시즌 (81경기)</button><button id="btnRegQuarter">3. 1/4 시즌 (40경기)</button><button id="btnBackFromRegular">뒤로가기</button></div>
+
+<div id="cardDetailScreen" class="screen"><h1>카드 상세 정보</h1><div id="cardDetailContent" tabindex="0" style="font-size:18px; margin-bottom:15px; background:#fff; padding:10px; border:1px solid #ccc; color:#000; text-align:left;"></div><button id="btnBackFromCardDetail">뒤로가기</button></div>
 <script>
+
+
+
+
+
         document.addEventListener("keydown", (e) => {
             if (e.key === "Escape") {
                 const act = document.querySelector('.screen.active');
@@ -569,18 +590,20 @@ function playGloveCatchSound(x, z) {
 
 
 
-const pt = [{id:'p_4seam',name:'포심'},{id:'p_sinker',name:'싱커'},{id:'p_cutter',name:'커터'},{id:'p_sweeper',name:'스위퍼'},{id:'p_slider',name:'슬라이더'},{id:'p_slurve',name:'슬러브'},{id:'p_curve',name:'커브'},{id:'p_knucklecurve',name:'너클커브'},{id:'p_changeup',name:'체인지업'},{id:'p_split',name:'스플리터'}];
-let rndP = gameMode === 'pitching' ? pt.find(p=>p.id===pPitchId) : pt[Math.floor(Math.random() * pt.length)]; window.currentPitchId = rndP.id; currentPitchName = rndP.name;
+const pNames = { 'p_4seam':'포심', 'p_sinker':'싱커', 'p_cutter':'커터', 'p_sweeper':'스위퍼', 'p_slider':'슬라이더', 'p_slurve':'슬러브', 'p_curve':'커브', 'p_knucklecurve':'너클커브', 'p_changeup':'체인지업', 'p_split':'스플리터' };
+let actP = window.currentEquippedPitcher || { throws: isLeftPitcher?'L':'R', pitchList: [{id:'p_4seam',speed:93},{id:'p_slider',speed:84}] }; isLeftPitcher = actP.throws === 'L';
+let rndP = gameMode === 'pitching' ? (actP.pitchList.find(p=>p.id===pPitchId)||actP.pitchList[0]) : actP.pitchList[Math.floor(Math.random() * actP.pitchList.length)]; window.currentPitchId = rndP.id; currentPitchName = pNames[rndP.id]; 
+let pitchSpeedMph = rndP.speed + (Math.random() * 5.8 - 2.9); // 카드에 명시된 해당 구종의 평균 속도 기준 -2.9 ~ +2.9 마일 랜덤 변화
 
-let pitchSpeedMph = ['포심','싱커','스플리터','커터'].includes(currentPitchName) ? Math.floor(Math.random()*6)+90 : ['슬라이더'].includes(currentPitchName) ? Math.floor(Math.random()*6)+85 : ['스위퍼','슬러브'].includes(currentPitchName) ? Math.floor(Math.random()*6)+80 : ['너클커브'].includes(currentPitchName) ? Math.floor(Math.random()*5)+76 : Math.floor(Math.random()*6)+70;
+
 
             lastPitchSpeedMph = pitchSpeedMph; speedToggleState = 0;
 
 
-            
-            let speedMs = pitchSpeedMph * 0.44704; 
-            currentFlightTime = 19.5 / speedMs; 
-            const flightTime = currentFlightTime;
+//- 등급별 비행 시간
+let cGrade = window.currentEquippedPitcher ? window.currentEquippedPitcher.grade : ['blue', 'orange', 'gold', 'red'][Math.floor(Math.random() * 4)];
+let speedMs = pitchSpeedMph * 0.44704, gMap = {'blue': 1.9, 'orange': 1.6, 'gold': 1.3, 'red': 1.0};
+currentFlightTime = (19.5 / speedMs) * (gMap[cGrade] || 1.0); const flightTime = currentFlightTime;
 
 const zBases = [
                 { name: "사구", val: 2.5, noteIdx: 0 }, { name: "바짝 붙이는", val: 2.0, noteIdx: 1 },   
@@ -2249,11 +2272,14 @@ if (e.key === "Shift") {
                 isLeftBatter = !isLeftBatter; boxStep = 0; updateListenerPosition(true);
                 speak((isLeftBatter ? "좌타자" : "우타자"));
             }
-            else if (e.key.toLowerCase() === "a") {
+
+else if (e.key.toLowerCase() === "a") {
                 if (lastPitchSpeedMph === 0) { speak("아직 투구된 공이 없습니다."); return; }
-                if (speedToggleState === 0) { speak(lastPitchSpeedMph + " 마일"); speedToggleState = 1; } 
-                else { let kmh = Math.round(lastPitchSpeedMph * 1.60934); speak(kmh + " 킬로미터"); speedToggleState = 0; }
+                if (speedToggleState === 0) { speak(lastPitchSpeedMph.toFixed(1) + " 마일"); speedToggleState = 1; } 
+                else { let kmh = lastPitchSpeedMph * 1.60934; speak(kmh.toFixed(1) + " 킬로미터"); speedToggleState = 0; }
             }
+
+
             else if (e.code === "ArrowLeft") { 
                 if (isPitching) return; 
                 if (!isLeftBatter) moveForward(); else moveBackward(); 
@@ -2283,15 +2309,259 @@ let cZ = rtBallStartZ + (rtBallEndZ - rtBallStartZ) * ratio;
                 let cY = Math.sin(ratio * Math.PI) * maxH;
 
 
-                speak(`${Math.round(cX)}, ${Math.round(cZ)}, ${Math.round(cY)}`);
-            }
+            
+    speak(`${Math.round(cX)}, ${Math.round(cZ)}, ${Math.round(cY)}`);
 
 
-
-
+}
         });
 
-        function preloadAllPitches() {
+
+// =================================================================
+        // [통합 완료] 메이저리그 2025 데이터베이스 & 가챠 스탯 엔진 (최종)
+        // =================================================================
+        let myCards = JSON.parse(localStorage.getItem('myCards') || '[]');
+        let myTeam = localStorage.getItem('myTeam') || null;
+        let invCurrentPage = 0;
+        const GRADE_NAMES = ['blue', 'orange', 'gold', 'red'];
+
+        const MLB_TEAMS = {
+            'AL': ['[동부] 볼티모어 오리올스', '[동부] 보스턴 레드삭스', '[동부] 뉴욕 양키스', '[동부] 탬파베이 레이스', '[동부] 토론토 블루제이스', '[중부] 시카고 화이트삭스', '[중부] 클리블랜드 가디언스', '[중부] 디트로이트 타이거스', '[중부] 캔자스시티 로열스', '[중부] 미네소타 트윈스', '[서부] 휴스턴 애스트로스', '[서부] 로스앤젤레스 에인절스', '[서부] 오클랜드 애슬레틱스', '[서부] 시애틀 매리너스', '[서부] 텍사스 레인저스'],
+            'NL': ['[동부] 애틀랜타 브레이브스', '[동부] 마이애미 말린스', '[동부] 뉴욕 메츠', '[동부] 필라델피아 필리스', '[동부] 워싱턴 내셔널스', '[중부] 시카고 컵스', '[중부] 신시내티 레즈', '[중부] 밀워키 브루어스', '[중부] 피츠버그 파이리츠', '[중부] 세인트루이스 카디널스', '[서부] 애리조나 다이아몬드백스', '[서부] 콜로라도 로키스', '[서부] 로스앤젤레스 다저스', '[서부] 샌디에이고 파드리스', '[서부] 샌프란시스코 자이언츠']
+        };
+
+        window.dbPeople = {}; window.dbMatch = {}; window.dbPitch2025 = {}; 
+        window.dbAwards = {}; window.dbBatting = {}; window.dbPitching = {}; window.dbFielding = {};
+        window.top10 = { ops: new Set(), era: new Set(), sv: new Set() }; // 탑 10 저장소
+
+        async function parseCSVToMap(url, keyIdx, isArray = false) {
+            try {
+                let r = await fetch(url); if(!r.ok) return {};
+                let rows = (await r.text()).split('\n').map(x => x.trim().split(','));
+                let map = {};
+                for(let i=1; i<rows.length; i++) {
+                    let row = rows[i]; if(!row || row.length <= keyIdx) continue;
+                    let key = row[keyIdx];
+                    if(isArray) { if(!map[key]) map[key] = []; map[key].push(row); }
+                    else { map[key] = row; }
+                }
+                return map;
+            } catch(e) { return {}; }
+        }
+
+        // [중요] 게임 시작 시 CSV 일괄 로드 및 OPS, ERA, SV 각 리그 탑10 정밀 계산기
+        async function initAllBaseballDatabase() {
+            window.dbMatch = await parseCSVToMap('./players match.csv', 1); 
+            window.dbPeople = await parseCSVToMap('./People.csv', 0); 
+            window.dbPitch2025 = await parseCSVToMap('./pitch2025.csv', 1, true); 
+            window.dbAwards = await parseCSVToMap('./AwardsPlayers.csv', 0, true);
+            window.dbBatting = await parseCSVToMap('./Batting.csv', 0, true);
+            window.dbPitching = await parseCSVToMap('./Pitching.csv', 0, true);
+            window.dbFielding = await parseCSVToMap('./Fielding.csv', 0, true);
+            
+            // 리그별 OPS, ERA 탑 10 선별
+            let batStats = [], pitStats = [];
+            for(let pid in window.dbBatting) {
+                let rs = window.dbBatting[pid].filter(x => x[1] === '2025');
+                if(!rs.length) continue;
+                let ab=0, h=0, d=0, t=0, hr=0, bb=0, hbp=0, sf=0;
+                rs.forEach(r => { ab+=+r[6]||0; h+=+r[8]||0; d+=+r[9]||0; t+=+r[10]||0; hr+=+r[11]||0; bb+=+r[15]||0; hbp+=+r[18]||0; sf+=+r[20]||0; });
+                if(ab > 100) { let obp = (h+bb+hbp)/(ab+bb+hbp+sf||1); let slg = (h-d-t-hr+2*d+3*t+4*hr)/(ab||1); batStats.push({id: pid, lg: rs[0][4], ops: obp+slg}); }
+            }
+            window.top10.ops = new Set([...batStats.filter(x=>x.lg==='AL').sort((a,b)=>b.ops-a.ops).slice(0,10).map(x=>x.id), ...batStats.filter(x=>x.lg==='NL').sort((a,b)=>b.ops-a.ops).slice(0,10).map(x=>x.id)]);
+            
+            for(let pid in window.dbPitching) {
+                let rs = window.dbPitching[pid].filter(x => x[1] === '2025');
+                if(!rs.length) continue;
+                let ip=0, er=0, sv=0; rs.forEach(r => { ip+=+r[12]||0; er+=+r[14]||0; sv+=+r[11]||0; });
+                if(ip > 150) pitStats.push({id: pid, lg: rs[0][4], era: (er*27)/(ip||1)});
+                if(sv > 0) pitStats.push({id: pid, lg: rs[0][4], sv: sv});
+            }
+            window.top10.era = new Set([...pitStats.filter(x=>x.era!==undefined&&x.lg==='AL').sort((a,b)=>a.era-b.era).slice(0,10).map(x=>x.id), ...pitStats.filter(x=>x.era!==undefined&&x.lg==='NL').sort((a,b)=>a.era-b.era).slice(0,10).map(x=>x.id)]);
+            window.top10.sv = new Set([...pitStats.filter(x=>x.sv!==undefined&&x.lg==='AL').sort((a,b)=>b.sv-a.sv).slice(0,10).map(x=>x.id), ...pitStats.filter(x=>x.sv!==undefined&&x.lg==='NL').sort((a,b)=>b.sv-a.sv).slice(0,10).map(x=>x.id)]);
+            console.log("메이저리그 데이터 로드 및 탑 10 세팅 완료");
+        }
+        initAllBaseballDatabase();
+
+        function rollGrade(isGuaranteed = false) {
+            let r = Math.random(); if (isGuaranteed) return r < 0.10 ? 'red' : 'gold';
+            if (r < 0.03) return 'red'; if (r < 0.13) return 'gold'; if (r < 0.30) return 'orange'; return 'blue';
+        }
+        function getDefGradeStr(val) { if(val >= 90) return "최고급"; if(val >= 80) return "고급"; if(val >= 60) return "중급"; return "하급"; }
+
+        // [중요] 절대 중첩 금지(최대 1등급만 상승)를 지키는 스탯 산출기
+        function getStat(grade, isStamina, isReliever, isDef, boost = 0, isGG = false) {
+            if (isDef) { let minD = isGG ? 80 : 50; return Math.floor(Math.random() * (101 - minD)) + minD; }
+            if (isStamina && isReliever) { let minS = boost > 0 ? 55 : 40, maxS = boost > 0 ? 70 : 60; return Math.floor(Math.random() * (maxS - minS + 1)) + minS; }
+            let finalBoost = Math.min(1, boost); // 절대 두 등급 초과(중첩) 방지 장치
+            let gIdx = Math.min(3, GRADE_NAMES.indexOf(grade)) + finalBoost; 
+            let min = 60 + (gIdx * 10); let max = 75 + (gIdx * 10);
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // [중요] 카드 생성 및 연도, 기록 데이터 패킹 모듈
+        function buildAdvancedCard(playerID, mlbID, targetTeam, forcedRole, grade) {
+            let pRow = window.dbPeople[playerID] || []; let fRows = window.dbFielding[playerID] || [];
+            let aRows = (window.dbAwards[playerID] || []).filter(x => x[1] === '2025');
+            let bRows = (window.dbBatting[playerID] || []).filter(x => x[1] === '2025');
+            let pitRows = (window.dbPitching[playerID] || []).filter(x => x[1] === '2025');
+
+            let fullName = `${pRow[13] || "가상"} ${pRow[14] || "선수"}`;
+            let throws = pRow[20] === 'L' ? 'L' : 'R'; let bats = pRow[19] === 'L' ? 'L' : 'R';
+            let pos = fRows.length > 0 ? fRows[0][5] : (forcedRole === 'P' ? 'SP' : 'OF');
+
+            let isMVP = aRows.some(x => x[2].includes("MVP")); let isCY = aRows.some(x => x[2].includes("Cy Young"));
+            let isGG = aRows.some(x => x[2].includes("Gold Glove")); let isROY = aRows.some(x => x[2].includes("Rookie of the Year"));
+            let totalHR = bRows.reduce((acc, r) => acc + parseInt(r[11]||0), 0);
+            let totalSB = bRows.reduce((acc, r) => acc + parseInt(r[13]||0), 0);
+            let totalSV = pitRows.reduce((acc, r) => acc + parseInt(r[11]||0), 0);
+
+            let isTopOPS = window.top10.ops.has(playerID);
+            let isTopERA = window.top10.era.has(playerID);
+            let isTopSV = window.top10.sv.has(playerID);
+
+            // [중첩 방지] Math.max를 사용하여 조건이 아무리 많아도 부스트 값은 무조건 1을 초과하지 않음
+            let allB = (isMVP || isCY || isROY) ? 1 : 0;
+            let pPowB = Math.max(allB, isTopSV ? 1 : 0); 
+            let pConB = Math.max(allB, isTopERA ? 1 : 0); 
+            let pStaB = Math.max(allB, isTopERA ? 1 : 0); 
+            let bPowB = Math.max(allB, totalHR >= 30 ? 1 : 0, isTopOPS ? 1 : 0); 
+            let bConB = Math.max(allB, isTopOPS ? 1 : 0); 
+            let bSpdB = Math.max(allB, totalSB >= 20 ? 1 : 0); 
+
+            let pitchList = []; let pRaw = window.dbPitch2025[mlbID] || [];
+            let typeMap = { 'ff':'p_4seam', 'si':'p_sinker', 'fc':'p_cutter', 'sl':'p_slider', 'ch':'p_changeup', 'cu':'p_curve', 'fs':'p_split', 'st':'p_sweeper', 'sv':'p_slurve', 'kc':'p_knucklecurve' };
+            pRaw.forEach(r => { let code = r[2] ? r[2].toLowerCase() : ''; if(typeMap[code]) pitchList.push({ id: typeMap[code], speed: parseFloat(r[3] || 90) }); });
+            if(pitchList.length === 0) pitchList.push({ id: 'p_4seam', speed: 92.5 });
+            pitchList.sort((a, b) => b.speed - a.speed); // 구속 빠른 순서대로 구종 강제 1번 정렬
+
+            let pGrade = grade; let sIdx = Math.max(0, GRADE_NAMES.indexOf(grade) - 2); let sGrade = fullName.includes("Ohtani") ? grade : GRADE_NAMES[sIdx];
+
+            let awardsText = [];
+            if(isMVP) awardsText.push("MVP"); if(isCY) awardsText.push("사이영 상"); if(isGG) awardsText.push("골든글러브"); if(isROY) awardsText.push("신인왕");
+            if(isTopOPS) awardsText.push("리그 OPS 탑10"); if(isTopERA) awardsText.push("리그 방어율 탑10");
+            if(totalHR > 0) awardsText.push(`시즌 ${totalHR}홈런`); if(totalSB > 0) awardsText.push(`시즌 ${totalSB}도루`); if(totalSV > 0) awardsText.push(`시즌 ${totalSV}세이브`);
+
+            return {
+                id: "C" + Date.now() + Math.floor(Math.random()*1000),
+                name: `${fullName} (2025)`, team: targetTeam, grade: grade, role: forcedRole, subPos: pos,
+                throws: throws, bats: bats, pitchList: pitchList, awards: awardsText.join(', ') || "해당 시즌 공식 지표 및 수상 이력이 존재하지 않습니다.",
+                pitch: { grade: forcedRole==='P'?pGrade:sGrade, pow: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pPowB), con: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pConB), sta: getStat(forcedRole==='P'?pGrade:sGrade, true, forcedRole==='P'?(pos==='RP'||pos==='CL'):true, false, pStaB), def: getStat(null,false,false,true, 0, isGG) },
+                bat: { grade: forcedRole=='B'?pGrade:sGrade, pow: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bPowB), con: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bConB), spd: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bSpdB), def: getStat(null,false,false,true, 0, isGG) }
+            };
+        }
+
+        // 가상 선수 비상 대책 함수
+        function generateCard(name, team, primaryRole, grade, isRel) {
+            return buildAdvancedCard("dummy", "dummy", team, primaryRole, grade);
+        }
+
+        // --- 버튼 이벤트 리스너 연결 ---
+        document.getElementById("btnDrawPitcher").addEventListener("click", () => drawCard(currentGachaTeam, 'P'));
+        document.getElementById("btnDrawBatter").addEventListener("click", () => drawCard(currentGachaTeam, 'B'));
+        document.getElementById("btnDrawAny").addEventListener("click", () => drawCard(currentGachaTeam, 'Any'));
+
+        function drawCard(teamName, role) {
+            if (myCards.length >= 100) { speak("보관함이 100장으로 가득 찼습니다. 기존 카드를 지워주세요."); return; }
+            let grade = rollGrade(), cRole = role === 'Any' ? (Math.random() < 0.5 ? 'P' : 'B') : role;
+            let matchKeys = Object.keys(window.dbMatch);
+            if(matchKeys.length === 0) return speak("데이터 동기화 대기중. 잠시 후 다시 시도하세요.");
+            let randMlbID = matchKeys[Math.floor(Math.random() * matchKeys.length)];
+            let c = buildAdvancedCard(window.dbMatch[randMlbID][0], randMlbID, teamName || "자유계약(FA)", cRole, grade);
+            myCards.push(c); localStorage.setItem('myCards', JSON.stringify(myCards));
+            speak(`${c.team}, ${c.grade.toUpperCase()} 등급, ${c.name} 카드를 획득했습니다!`);
+        }
+
+function grantStarterPack(teamName) {
+            let keys = Object.keys(window.dbMatch);
+            if(keys.length < 30) {
+                for(let i=0; i<5; i++) myCards.push(generateCard("선발 "+i, teamName, 'P', rollGrade(), false));
+                for(let i=0; i<8; i++) myCards.push(generateCard("불펜 "+i, teamName, 'P', rollGrade(), true));
+                for(let i=13; i<26; i++) myCards.push(generateCard("야수 "+i, teamName, 'B', rollGrade(), false));
+            } else {
+                myCards.push(buildAdvancedCard(window.dbMatch[keys[0]][0], keys[0], teamName, 'P', rollGrade(true)));
+                myCards.push(buildAdvancedCard(window.dbMatch[keys[1]][0], keys[1], teamName, 'B', rollGrade(true)));
+                for(let i=0; i<12; i++) myCards.push(buildAdvancedCard(window.dbMatch[keys[Math.floor(Math.random()*keys.length)]][0], keys[Math.floor(Math.random()*keys.length)], teamName, 'P', rollGrade()));
+                for(let i=0; i<12; i++) myCards.push(buildAdvancedCard(window.dbMatch[keys[Math.floor(Math.random()*keys.length)]][0], keys[Math.floor(Math.random()*keys.length)], teamName, 'B', rollGrade()));
+            }
+            myCards.forEach(c => c.inRoster = true); localStorage.setItem('myCards', JSON.stringify(myCards));
+            speak(`${teamName} 구단 창단 완료! 26명 로스터가 발급되었습니다.`);
+        }
+
+        // 보관함 및 상세 정보 렌더링
+        function renderInventory(page) {
+            let select = document.getElementById("invSelect"); select.innerHTML = "";
+            let btnContainer = document.getElementById("invBtnContainer"); btnContainer.innerHTML = "";
+            let pageBtns = document.getElementById("invPageButtons"); pageBtns.innerHTML = "";
+            let sortedCards = [...myCards].sort((a,b) => GRADE_NAMES.indexOf(b.grade) - GRADE_NAMES.indexOf(a.grade));
+            let totalPages = Math.ceil(sortedCards.length / 25) || 1;
+            document.getElementById("invStatus").innerText = `보관함: ${myCards.length}/100장 (페이지 ${page+1}/${totalPages})`;
+            for (let i = 0; i < totalPages; i++) {
+                if (i === page) { let span = document.createElement("span"); span.innerText = `[${i+1}페이지(현재)]`; span.style.fontWeight = "bold"; pageBtns.appendChild(span); } 
+                else { let b = document.createElement("button"); b.innerText = `${i+1}페이지`; b.onclick = () => { renderInventory(i); speak(`${i+1}페이지 이동`); }; pageBtns.appendChild(b); }
+            }
+            document.getElementById("btnInvPrev").style.visibility = page > 0 ? "visible" : "hidden"; document.getElementById("btnInvNext").style.visibility = page < totalPages - 1 ? "visible" : "hidden";
+
+            let start = page * 25; let end = Math.min(start + 25, sortedCards.length);
+            for(let i=start; i<end; i++) {
+                let c = sortedCards[i]; let text = `[${c.grade.toUpperCase()}] ${c.name} (${c.team}) - ${c.inRoster?'로스터O':'로스터X'}`;
+                let opt = document.createElement("option"); opt.value = c.id; opt.innerText = text; select.appendChild(opt);
+                let cBtn = document.createElement("button"); cBtn.innerText = text; cBtn.onclick = () => showCardDetail(c.id); btnContainer.appendChild(cBtn);
+            }
+            invCurrentPage = page;
+        }
+
+        const showCardDetail = (id) => {
+            let c = myCards.find(x => x.id === id); if(!c) return;
+            let pNames = { 'p_4seam':'포심 패스트볼', 'p_sinker':'싱커', 'p_cutter':'커터', 'p_sweeper':'스위퍼', 'p_slider':'슬라이더', 'p_slurve':'슬러브', 'p_curve':'커브', 'p_knucklecurve':'너클커브', 'p_changeup':'체인지업', 'p_split':'스플리터' };
+            let pListText = c.pitchList ? c.pitchList.map((p, idx) => `${idx+1}번 구종: ${pNames[p.id] || p.id} (평균 ${p.speed.toFixed(1)}마일)`).join('<br>') : "타자 카드 (전용 구종 없음)";
+            document.getElementById("cardDetailContent").innerHTML = `
+                이름: ${c.name}<br>구단: ${c.team}<br>등급: ${c.grade.toUpperCase()}<br>
+                상세 포지션: ${c.subPos || (c.role==='P'?'투수':'야수')}<br>
+                투/타 역학: ${c.throws==='L'?'좌투':'우투'} / ${c.bats==='L'?'좌타':'우타'}<br><br>
+                <b>[능력치 스케일]</b><br>
+                투수 스탯: 파워 ${c.pitch.pow}, 제구 ${c.pitch.con}, 체력 ${c.pitch.sta}<br>
+                타자 스탯: 파워 ${c.bat.pow}, 컨택 ${c.bat.con}, 주루 ${c.bat.spd}<br>
+                종합 수비력 가치: ${c.pitch.def} [${getDefGradeStr(c.pitch.def)}]<br><br>
+                <b>[보유 구종 리스트 및 실시간 평균 구속]</b><br>
+                ${pListText}<br><br>
+                <h2>2025년 기록</h2>
+                <p>${c.awards}</p>
+            `;
+            switchScreen("cardDetailScreen", "cardDetailContent");
+            speak(`${c.name} 선수의 상세 프로필 카드 화면입니다. 방향키로 기록을 읽어보세요.`);
+        };
+
+        // --- 기타 메뉴 버튼 제어 연결 ---
+        document.getElementById("btnBackFromCardDetail").addEventListener("click", () => { switchScreen("inventoryScreen", "invSelect"); document.getElementById("invSelect").focus(); });
+        document.getElementById("invSelect").addEventListener("keydown", (e) => { if(e.code === "Enter" && e.target.value) { showCardDetail(e.target.value); } else if (e.code === "ArrowUp" || e.code === "ArrowDown") { setTimeout(() => speak(e.target.options[e.target.selectedIndex].innerText), 50); } });
+        document.getElementById("btnInvNext").addEventListener("click", () => { if((invCurrentPage+1)*25 < myCards.length) { renderInventory(invCurrentPage+1); speak("다음 페이지"); } });
+        document.getElementById("btnInvPrev").addEventListener("click", () => { if(invCurrentPage > 0) { renderInventory(invCurrentPage-1); speak("이전 페이지"); } });
+        document.getElementById("btnInvRemoveRoster").addEventListener("click", () => { let selId = document.getElementById("invSelect").value; if(!selId) return speak("제외할 카드를 선택하세요."); let idx = myCards.findIndex(c => c.id === selId); if(myCards[idx].inRoster) { myCards[idx].inRoster = false; localStorage.setItem('myCards', JSON.stringify(myCards)); renderInventory(invCurrentPage); speak("로스터에서 제외했습니다."); } });
+        document.getElementById("btnRegularMatch").addEventListener("click", () => { if (!myTeam) { document.getElementById("teamLeagueGroup").style.display = "block"; document.getElementById("teamListGroup").style.display = "none"; switchScreen("teamSelectScreen", "btnLeagueAL"); speak("정규 페넌트레이스를 위해 나의 팀을 창단해야 합니다."); } else { switchScreen("regularPlayScreen", "btnRegFull"); speak("페넌트레이스 시즌 경기 수를 선택하세요."); } });
+        document.getElementById("btnLeagueAL").addEventListener("click", () => { document.getElementById("teamLeagueGroup").style.display = "none"; document.getElementById("teamListGroup").style.display = "block"; populateTeamList('AL', 'teamSelect', 'teamBtnGroup', 'teamLeagueTitle'); speak("아메리칸 리그 선택."); document.getElementById("teamSelect").focus(); });
+        document.getElementById("btnLeagueNL").addEventListener("click", () => { document.getElementById("teamLeagueGroup").style.display = "none"; document.getElementById("teamListGroup").style.display = "block"; populateTeamList('NL', 'teamSelect', 'teamBtnGroup', 'teamLeagueTitle'); speak("내셔널 리그 선택."); document.getElementById("teamSelect").focus(); });
+        function populateTeamList(league, selectId, btnGroupId, titleId) { let sel = document.getElementById(selectId); sel.innerHTML = ""; let btnGrp = document.getElementById(btnGroupId); btnGrp.innerHTML = ""; document.getElementById(titleId).innerText = league === 'AL' ? "아메리칸 리그 소속 팀" : "내셔널 리그 소속 팀"; MLB_TEAMS[league].forEach(t => { let opt = document.createElement("option"); opt.value = t; opt.innerText = t; sel.appendChild(opt); let b = document.createElement("button"); b.innerText = t; b.onclick = () => { sel.value = t; speak(t + " 선택됨."); }; btnGrp.appendChild(b); }); sel.onchange = (e) => speak(e.target.options[e.target.selectedIndex].text + " 선택됨."); }
+        document.getElementById("btnConfirmTeam").addEventListener("click", () => { let t = document.getElementById("teamSelect").value; if(!t) return speak("팀을 먼저 선택하세요."); myTeam = t; localStorage.setItem('myTeam', myTeam); grantStarterPack(t); switchScreen("regularPlayScreen", "btnRegFull"); });
+        let currentGachaTeam = "전체";
+        document.getElementById("btnGoGacha").addEventListener("click", () => { document.getElementById("gachaStep1").style.display = "block"; document.getElementById("gachaStepLeague").style.display = "none"; document.getElementById("gachaStepTeam").style.display = "none"; document.getElementById("gachaStepDraw").style.display = "none"; switchScreen("gachaScreen", "btnDrawTeamMenu"); });
+        document.getElementById("btnGoInventory").addEventListener("click", () => { renderInventory(0); switchScreen("inventoryScreen", "invSelect"); });
+        document.getElementById("btnBackFromGacha").addEventListener("click", () => switchScreen("mainMenuScreen", "btnGoSinglePlayer"));
+        document.getElementById("btnBackFromInv").addEventListener("click", () => switchScreen("mainMenuScreen", "btnGoSinglePlayer"));
+        document.getElementById("btnBackFromTeam").addEventListener("click", () => switchScreen("singlePlayerScreen", "btnRegularMatch"));
+        document.getElementById("btnBackFromRegular").addEventListener("click", () => switchScreen("singlePlayerScreen", "btnBattingPractice"));
+        document.getElementById("btnDrawTeamMenu").addEventListener("click", () => { document.getElementById("gachaStep1").style.display = "none"; document.getElementById("gachaStepLeague").style.display = "block"; speak("리그를 선택하세요."); document.getElementById("btnGachaAL").focus(); });
+        document.getElementById("btnDrawAllMenu").addEventListener("click", () => { document.getElementById("gachaStep1").style.display = "none"; document.getElementById("gachaStepDraw").style.display = "block"; currentGachaTeam = "전체 무작위"; document.getElementById("gachaTargetText").innerText = "전체 구단 무작위 뽑기"; speak("전체 뽑기입니다. 버튼을 고르세요."); document.getElementById("btnDrawPitcher").focus(); });
+        document.getElementById("btnGachaAL").addEventListener("click", () => { document.getElementById("gachaStepLeague").style.display="none"; document.getElementById("gachaStepTeam").style.display="block"; populateTeamList('AL', 'gachaTeamSelect', 'gachaTeamBtnGroup', 'gachaDrawTitle'); speak("아메리칸 리그 선택됨."); document.getElementById("gachaTeamSelect").focus(); });
+        document.getElementById("btnGachaNL").addEventListener("click", () => { document.getElementById("gachaStepLeague").style.display="none"; document.getElementById("gachaStepTeam").style.display="block"; populateTeamList('NL', 'gachaTeamSelect', 'gachaTeamBtnGroup', 'gachaDrawTitle'); speak("내셔널 리그 선택됨."); document.getElementById("gachaTeamSelect").focus(); });
+        const processGachaTeamSelect = (t) => { currentGachaTeam = t; document.getElementById("gachaStepTeam").style.display = "none"; document.getElementById("gachaStepDraw").style.display = "block"; document.getElementById("gachaTargetText").innerText = currentGachaTeam + " 전용 뽑기"; speak(currentGachaTeam + " 전용 뽑기. 버튼을 고르세요."); document.getElementById("btnDrawPitcher").focus(); };
+        document.getElementById("gachaTeamSelect").addEventListener("keydown", (e) => { if (e.code === "Enter" && e.target.value) processGachaTeamSelect(e.target.value); });
+        document.getElementById("gachaTeamBtnGroup").addEventListener("click", (e) => { if(e.target.tagName === 'BUTTON') processGachaTeamSelect(e.target.innerText); });
+
+
+
+      function  preloadAllPitches(){
+
 
 
 
