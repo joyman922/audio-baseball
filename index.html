@@ -2369,8 +2369,11 @@ function printConsole(text, spokenText) {
             if (window.myCards.length >= 100) return speak("보관함이 100장으로 가득 찼습니다.");
             let grade = rollGrade(); let cRole = role === 'Any' ? (Math.random() < 0.5 ? 'P' : 'B') : role;
             let keys = Object.keys(window.dbMatch); if(keys.length === 0) return speak("데이터 동기화 대기중입니다.");
-            let rID = keys[Math.floor(Math.random() * keys.length)];
-            let c = buildAdvancedCard(window.dbMatch[rID][0], rID, teamName, cRole, grade);
+
+let rID = keys[Math.floor(Math.random() * keys.length)]; let cardYear = window.targetYears[Math.floor(Math.random() * window.targetYears.length)];
+            let c = buildAdvancedCard(window.dbMatch[rID][0], window.dbMatch[rID][10], teamName, cRole, grade, cardYear);
+
+
             window.myCards.push(c); window.saveCards();
             printConsole(`가챠 결과: ${c.team}, ${c.grade.toUpperCase()} 등급, ${c.name} 획득! (엔터키 반복 시 연속 뽑기)`);
         };
@@ -2381,47 +2384,48 @@ async function parseCSVToMap(url, keyIdx, isArray = false) {
         }
 
 
-        async function initAllBaseballDatabase() {
-            printConsole("데이터를 로딩하고 있습니다. 잠시만 기다려주세요...");
-            window.dbMatch = await parseCSVToMap('./players%20match.csv', 1); window.dbPeople = await parseCSVToMap('./People.csv', 0); window.dbPitch2025 = await parseCSVToMap('./pitch2025.csv', 1, true); window.dbAwards = await parseCSVToMap('./AwardsPlayers.csv', 0, true); window.dbBatting = await parseCSVToMap('./Batting.csv', 0, true); window.dbPitching = await parseCSVToMap('./Pitching.csv', 0, true); window.dbFielding = await parseCSVToMap('./Fielding.csv', 0, true);
-            let batStats = [], pitStats = [];
-            for(let pid in window.dbBatting) {
-                let rs = window.dbBatting[pid].filter(x => x[1] === '2025'); if(!rs.length) continue;
-                let ab=0, h=0, d=0, t=0, hr=0, bb=0, hbp=0, sf=0; rs.forEach(r => { ab+=+r[6]||0; h+=+r[8]||0; d+=+r[9]||0; t+=+r[10]||0; hr+=+r[11]||0; bb+=+r[15]||0; hbp+=+r[18]||0; sf+=+r[20]||0; });
-                if(ab > 100) { let obp = (h+bb+hbp)/(ab+bb+hbp+sf||1); let slg = (h-d-t-hr+2*d+3*t+4*hr)/(ab||1); batStats.push({id: pid, lg: rs[0][4], ops: obp+slg}); }
-            }
-            window.top10.ops = new Set([...batStats.filter(x=>x.lg==='AL').sort((a,b)=>b.ops-a.ops).slice(0,10).map(x=>x.id), ...batStats.filter(x=>x.lg==='NL').sort((a,b)=>b.ops-a.ops).slice(0,10).map(x=>x.id)]);
-            for(let pid in window.dbPitching) {
-                let rs = window.dbPitching[pid].filter(x => x[1] === '2025'); if(!rs.length) continue;
-                let ip=0, er=0, sv=0; rs.forEach(r => { ip+=+r[12]||0; er+=+r[14]||0; sv+=+r[11]||0; });
-                if(ip > 150) pitStats.push({id: pid, lg: rs[0][4], era: (er*27)/(ip||1)});
-                if(sv > 0) pitStats.push({id: pid, lg: rs[0][4], sv: sv});
-            }
-            window.top10.era = new Set([...pitStats.filter(x=>x.era!==undefined&&x.lg==='AL').sort((a,b)=>a.era-b.era).slice(0,10).map(x=>x.id), ...pitStats.filter(x=>x.era!==undefined&&x.lg==='NL').sort((a,b)=>a.era-b.era).slice(0,10).map(x=>x.id)]);
-            window.top10.sv = new Set([...pitStats.filter(x=>x.sv!==undefined&&x.lg==='AL').sort((a,b)=>b.sv-a.sv).slice(0,10).map(x=>x.id), ...pitStats.filter(x=>x.sv!==undefined&&x.lg==='NL').sort((a,b)=>b.sv-a.sv).slice(0,10).map(x=>x.id)]);
-            window.changeState("MAIN_MENU");
-        }
+//-아래 연도수 변경으로 다른 연도로 연동 가능해짐.
+
+window.targetYears = ["2025"]; async function initAllBaseballDatabase() { printConsole("데이터 로딩중..."); window.top10 = {ba:new Set(), era:new Set(), sv:new Set(), so:new Set()}; window.dbMatch = await parseCSVToMap('./players%20match.csv', 1); window.dbPeople = await parseCSVToMap('./People.csv', 1); window.dbPitch = await parseCSVToMap(`./pitch2025.csv`, 1, true); window.dbAwards = await parseCSVToMap('./AwardsPlayers.csv', 0, true); window.dbBatting = await parseCSVToMap('./Batting.csv', 0, true); window.dbPitching = await parseCSVToMap('./Pitching.csv', 0, true); window.dbFielding = await parseCSVToMap('./Fielding.csv', 0, true);
+
+
+            let bS=[], pS=[]; for(let p in window.dbBatting){ let rs=window.dbBatting[p].filter(x=>x[1]===window.targetYear); if(rs.length){ let ab=0,h=0; rs.forEach(r=>{ab+=+r[6]||0; h+=+r[8]||0;}); if(ab>100) bS.push({id:p, lg:rs[0][4], ba:h/ab}); } } window.top10.ba = new Set([...bS.filter(x=>x.lg==='AL').sort((a,b)=>b.ba-a.ba).slice(0,10).map(x=>x.id), ...bS.filter(x=>x.lg==='NL').sort((a,b)=>b.ba-a.ba).slice(0,10).map(x=>x.id)]);
+            for(let p in window.dbPitching){ let rs=window.dbPitching[p].filter(x=>x[1]===window.targetYear); if(rs.length){ let ip=0,er=0,sv=0,so=0; rs.forEach(r=>{ip+=+r[12]||0; er+=+r[14]||0; sv+=+r[11]||0; so+=+r[17]||0;}); if(ip>150) pS.push({id:p, lg:rs[0][4], era:(er*27)/ip, so:so}); if(sv>0) pS.push({id:p, lg:rs[0][4], sv:sv}); } } window.top10.era = new Set([...pS.filter(x=>x.era!==undefined&&x.lg==='AL').sort((a,b)=>a.era-b.era).slice(0,10).map(x=>x.id), ...pS.filter(x=>x.era!==undefined&&x.lg==='NL').sort((a,b)=>a.era-b.era).slice(0,10).map(x=>x.id)]); window.top10.sv = new Set([...pS.filter(x=>x.sv!==undefined&&x.lg==='AL').sort((a,b)=>b.sv-a.sv).slice(0,10).map(x=>x.id), ...pS.filter(x=>x.sv!==undefined&&x.lg==='NL').sort((a,b)=>b.sv-a.sv).slice(0,10).map(x=>x.id)]); window.top10.so = new Set([...pS.filter(x=>x.so!==undefined&&x.lg==='AL').sort((a,b)=>b.so-a.so).slice(0,10).map(x=>x.id), ...pS.filter(x=>x.so!==undefined&&x.lg==='NL').sort((a,b)=>b.so-a.so).slice(0,10).map(x=>x.id)]); window.changeState("MAIN_MENU"); }
+
 
         function rollGrade(isGuaranteed = false) { let r = Math.random(); if (isGuaranteed) return r < 0.05 ? 'red' : 'gold'; if (r < 0.01) return 'red'; if (r < 0.05) return 'gold'; if (r < 0.15) return 'orange'; return 'blue'; }
 
-        function getStat(grade, isStamina, isReliever, isDef, boost = 0, isGG = false) {
-            if (isDef) { let minD = isGG ? 80 : 50; return Math.floor(Math.random() * (101 - minD)) + minD; }
+function getStat(grade, isStamina, isReliever, isDef, boost = 0, isGG = false, spdBonus = false) {
+            if (isDef) { let minD = isGG ? 80 : 50; return Math.floor(Math.random() * (101 - minD)) + minD; } if (spdBonus) return Math.floor(Math.random() * 41) + 80; else if (grade===null) return Math.floor(Math.random() * 51) + 50;
             if (isStamina && isReliever) { let minS = boost > 0 ? 55 : 40, maxS = boost > 0 ? 70 : 60; return Math.floor(Math.random() * (maxS - minS + 1)) + minS; }
-            let finalBoost = Math.min(1, boost); let gIdx = Math.min(3, GRADE_NAMES.indexOf(grade)) + finalBoost; let min = 60 + (gIdx * 10); let max = 75 + (gIdx * 10); return Math.floor(Math.random() * (max - min + 1)) + min;
-        }
+            let gIdx = Math.min(4, GRADE_NAMES.indexOf(grade) + boost); let min = gIdx === 0 ? 60 : 66 + (gIdx * 10); let max = 75 + (gIdx * 10); return Math.floor(Math.random() * (max - min + 1)) + min; }
 
-        function buildAdvancedCard(playerID, mlbID, targetTeam, forcedRole, grade) {
+
+
+
+function buildAdvancedCard(playerID, mlbID, targetTeam, forcedRole, grade, cardYear = "2025") {
             let pRow = window.dbPeople[playerID] || []; let fRows = window.dbFielding[playerID] || [];
-            let aRows = (window.dbAwards[playerID] || []).filter(x => x[1] === '2025'); let bRows = (window.dbBatting[playerID] || []).filter(x => x[1] === '2025'); let pitRows = (window.dbPitching[playerID] || []).filter(x => x[1] === '2025');
-            let fullName = `${pRow[13] || "가상"} ${pRow[14] || "선수"}`; let throws = pRow[20] === 'L' ? 'L' : 'R'; let bats = pRow[19] === 'L' ? 'L' : 'R'; let pos = fRows.length > 0 ? fRows[0][5] : (forcedRole === 'P' ? 'SP' : 'OF');
-            let isMVP = aRows.some(x => x[2].includes("MVP")); let isCY = aRows.some(x => x[2].includes("Cy Young")); let isGG = aRows.some(x => x[2].includes("Gold Glove")); let isROY = aRows.some(x => x[2].includes("Rookie of the Year"));
-            let totalHR = bRows.reduce((acc, r) => acc + parseInt(r[11]||0), 0); let totalSB = bRows.reduce((acc, r) => acc + parseInt(r[13]||0), 0); let totalSV = pitRows.reduce((acc, r) => acc + parseInt(r[11]||0), 0);
-            let allB = (isMVP || isCY || isROY) ? 1 : 0; let pPowB = Math.max(allB, window.top10.sv.has(playerID) ? 1 : 0); let pConB = Math.max(allB, window.top10.era.has(playerID) ? 1 : 0); let pStaB = Math.max(allB, window.top10.era.has(playerID) ? 1 : 0); let bPowB = Math.max(allB, totalHR >= 30 ? 1 : 0, window.top10.ops.has(playerID) ? 1 : 0); let bConB = Math.max(allB, window.top10.ops.has(playerID) ? 1 : 0); let bSpdB = Math.max(allB, totalSB >= 20 ? 1 : 0); 
-            let pitchList = []; let pRaw = window.dbPitch2025[mlbID] || []; let typeMap = { 'ff':'p_4seam', 'si':'p_sinker', 'fc':'p_cutter', 'sl':'p_slider', 'ch':'p_changeup', 'cu':'p_curve', 'fs':'p_split', 'st':'p_sweeper', 'sv':'p_slurve', 'kc':'p_knucklecurve' };
-            pRaw.forEach(r => { let code = r[2] ? r[2].toLowerCase() : ''; if(typeMap[code]) pitchList.push({ id: typeMap[code], speed: parseFloat(r[3] || 90) }); }); if(pitchList.length === 0) pitchList.push({ id: 'p_4seam', speed: 92.5 }); pitchList.sort((a, b) => b.speed - a.speed);
-            let pGrade = grade; let sIdx = Math.max(0, GRADE_NAMES.indexOf(grade) - 2); let sGrade = fullName.includes("Ohtani") ? grade : GRADE_NAMES[sIdx];
-            let awardsText = []; if(isMVP) awardsText.push("MVP"); if(isCY) awardsText.push("사이영 상"); if(isGG) awardsText.push("골든글러브"); if(isROY) awardsText.push("신인왕"); if(window.top10.ops.has(playerID)) awardsText.push("리그 OPS 탑10"); if(window.top10.era.has(playerID)) awardsText.push("리그 방어율 탑10"); if(totalHR > 0) awardsText.push(`${totalHR}홈런`); if(totalSB > 0) awardsText.push(`${totalSB}도루`); if(totalSV > 0) awardsText.push(`${totalSV}세이브`);
-            return { id: "C" + Date.now() + Math.floor(Math.random()*1000), name: `${fullName} (2025)`, team: targetTeam, grade: grade, role: forcedRole, subPos: pos, throws: throws, bats: bats, pitchList: pitchList, awards: awardsText.join(', ') || "기록 없음", rosterSlot: null, isLocked: false, pitch: { grade: forcedRole==='P'?pGrade:sGrade, pow: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pPowB), con: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pConB), sta: getStat(forcedRole==='P'?pGrade:sGrade, true, forcedRole==='P'?(pos==='RP'||pos==='CL'):true, false, pStaB), def: getStat(null,false,false,true, 0, isGG) }, bat: { grade: forcedRole=='B'?pGrade:sGrade, pow: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bPowB), con: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bConB), spd: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bSpdB), def: getStat(null,false,false,true, 0, isGG) } };
+            let aRows = (window.dbAwards[playerID] || []).filter(x => x[2] === cardYear); let bRows = (window.dbBatting[playerID] || []).filter(x => x[1] === cardYear); let pitRows = (window.dbPitching[playerID] || []).filter(x => x[1] === cardYear);
+
+
+
+
+
+            let fullName = `${pRow[14] || "가상"} ${pRow[15] || "선수"}`; let throws = pRow[20] === 'L' ? 'L' : 'R'; let bats = pRow[19] === 'L' ? 'L' : 'R'; let pos = fRows.length > 0 ? fRows[0][5] : (forcedRole === 'P' ? 'SP' : 'OF');
+
+
+
+
+let isMVP = aRows.some(x => x[1].includes("MVP")), isCY = aRows.some(x => x[1].includes("Cy Young")), isGG = aRows.some(x => x[1].includes("Gold Glove")), tHR = bRows.reduce((a,r)=>a+(+r[11]||0),0), tSB = bRows.reduce((a,r)=>a+(+r[13]||0),0), tSV = pitRows.reduce((a,r)=>a+(+r[11]||0),0);
+            let aB = (isMVP || isCY) ? 1 : 0; let pPowB = aB + (window.top10.sv.has(playerID) ? 1 : 0), pConB = aB + (window.top10.so.has(playerID) ? 1 : 0), pStaB = aB + (window.top10.era.has(playerID) ? 1 : 0), bPowB = aB + (tHR >= 30 ? 1 : 0), bConB = aB + (window.top10.ba.has(playerID) ? 1 : 0);
+            let pRaw = window.dbPitch[mlbID] || [], tMap = { 'ff':'p_4seam', 'si':'p_sinker', 'fc':'p_cutter', 'sl':'p_slider', 'ch':'p_changeup', 'cu':'p_curve', 'fs':'p_split', 'st':'p_sweeper', 'sv':'p_slurve', 'kc':'p_knucklecurve' }, pitchList = [];
+            pRaw.forEach(r => { let code = r[2] ? r[2].toLowerCase() : ''; if(tMap[code]) pitchList.push({ id: tMap[code], speed: parseFloat(r[3] || 90) }); }); if(pitchList.length === 0) pitchList.push({ id: 'p_4seam', speed: 92.5 }); pitchList.sort((a, b) => b.speed - a.speed);
+            let pGrade = grade, sIdx = Math.max(0, GRADE_NAMES.indexOf(grade) - 2), sGrade = fullName.includes("Ohtani") ? grade : GRADE_NAMES[sIdx]; let aw = []; if(isMVP) aw.push("MVP"); if(isCY) aw.push("사이영 상"); if(isGG) aw.push("골든글러브"); if(window.top10.ba.has(playerID)) aw.push("타율 탑10"); if(window.top10.era.has(playerID)) aw.push("방어율 탑10"); if(tHR>0) aw.push(`${tHR}홈런`); if(tSB>0) aw.push(`${tSB}도루`); if(tSV>0) aw.push(`${tSV}세이브`);
+            return { id: "C" + Date.now() + Math.floor(Math.random()*1000), name: `${fullName} (${window.targetYear})`, team: targetTeam, grade: grade, role: forcedRole, subPos: pos, throws: throws, bats: bats, pitchList: pitchList, awards: aw.join(', ') || "기록 없음", rosterSlot: null, isLocked: false, pitch: { pow: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pPowB), con: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pConB), sta: getStat(forcedRole==='P'?pGrade:sGrade, true, forcedRole==='P'?(pos==='RP'||pos==='CL'):true, false, pStaB), def: getStat(null,false,false,true, 0, isGG) }, bat: { pow: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bPowB), con: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bConB), spd: getStat(null, false, false, false, 0, false, tSB >= 30), def: getStat(null,false,false,true, 0, isGG) } };
+
+
+
+
         }
 
 function grantStarterPack(teamName) {
@@ -2449,7 +2453,7 @@ let keys = Object.keys(window.dbMatch), uKeys = new Set(); const getU = () => { 
 window.readCurrentState = function() {
             let txt = "";
             switch(window.currentState) {
-                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.5"]; txt = lists.menu[cur.main]; break;
+                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.6"]; txt = lists.menu[cur.main]; break;
                 case "SINGLE_PLAYER": lists.menu = ["1. 타격 연습", "2. 투구 연습", "3. 연습 게임", "4. 정규 게임", "5. 올스타전", "6. 홈런더비"]; txt = lists.menu[cur.single]; break;
                 case "PRACTICE_INNING": lists.menu = ["3이닝", "6이닝", "9이닝"]; txt = "[연습 게임]\n" + lists.menu[cur.pracIn]; break;
                 case "REGULAR_SEASON": lists.menu = ["162경기 (풀 시즌)", "81경기 (하프 시즌)", "40경기 (미니 시즌)"]; txt = "[정규 게임]\n" + lists.menu[cur.regSn]; break;
@@ -2486,8 +2490,9 @@ case "ALL_CARDS":
 if(lists.allCardsPage.length === 0) { printConsole(hd + "보유한 카드가 없습니다.", `보유 카드 0/100, 1/1페이지. 보유한 카드가 없습니다.`); return; }
 
 let totalPages = Math.max(1, Math.ceil(window.myCards.length / 25)), bar = `보유 카드 ${window.myCards.length}/100, ${tempVars.page+1}/${totalPages}페이지`, c = lists.allCardsPage[cur.all - 1];
-                    let vList = (cur.all === 0 ? "▶ " : "  ") + bar + "\n" + lists.allCardsPage.map((x, i) => (i === cur.all - 1 ? "▶ " : "  ") + `[${x.grade.toUpperCase()}] ${x.name}` + (x.isLocked ? " (잠금)" : "")).join("\n");
-                    let sTxt = cur.all === 0 ? bar : (tempVars.delSet.has(c.id) ? "삭제선택됨 " : "") + `[${c.grade.toUpperCase()}] ${c.name}` + (c.isLocked ? " 잠금" : "");
+
+let vList = (cur.all === 0 ? "▶ " : "  ") + bar + "\n" + lists.allCardsPage.map((x, i) => (i === cur.all - 1 ? "▶ " : "  ") + `[${x.grade.toUpperCase()}] ${x.name} / ${x.team} / ${x.rosterSlot!==null?"로스터 등록됨":"미등록"}` + (x.isLocked ? " (잠금)" : "")).join("\n");
+                    let sTxt = cur.all === 0 ? bar : (tempVars.delSet.has(c.id) ? "삭제선택됨 " : "") + `[${c.grade.toUpperCase()}] ${c.name} / ${c.team} / ${c.rosterSlot!==null?"로스터 등록됨":"미등록"}` + (c.isLocked ? " 잠금" : "");
 
 
                     printConsole(vList, sTxt); return;
@@ -2542,19 +2547,13 @@ function swapRosterSlots(s1, s2) {
             if(lists.allCardsPage.length === 0 && page > 0) { tempVars.page--; loadAllCardsPage(tempVars.page); }
         }
 
-        function getPlayerInfoLines(c, scopeSlot) {
-            let lines = [];
-            let pNames = { 'p_4seam':'포심', 'p_sinker':'싱커', 'p_cutter':'커터', 'p_sweeper':'스위퍼', 'p_slider':'슬라이더', 'p_curve':'커브', 'p_split':'스플리터' };
-            let pListText = c.pitchList ? c.pitchList.map(p => `${pNames[p.id]||p.id} ${p.speed.toFixed(1)}마일`).join(', ') : "없음";
-            let preferPitch = scopeSlot >= 10; 
-            let pitL = `파워 ${c.pitch.pow}, 제구 ${c.pitch.con}, 체력 ${c.pitch.sta}`;
-            let batL = `파워 ${c.bat.pow}, 컨택 ${c.bat.con}, 주루 ${c.bat.spd}`;
-            lines.push(`등급: ${c.grade.toUpperCase()}, 이름: ${c.name}, 팀명: ${c.team}, 포지션: ${c.subPos}`);
-            lines.push(`투타: ${c.throws === 'L' ? '좌투' : '우투'} ${c.bats === 'L' ? '좌타' : '우타'}`); // 요청사항: 선수목록의 2번째 행 (투타정보)
-            if(preferPitch) { lines.push("투수 스탯: "+pitL); lines.push("타자 스탯: "+batL); lines.push(`구종: ${pListText}`); } 
-            else { lines.push("타자 스탯: "+batL); lines.push("투수 스탯: "+pitL); }
-            lines.push(`해당 연도 기록: ${c.awards}`); return lines;
-        }
+function getPlayerInfoLines(c) {
+            let nm = {'p_4seam':'포심','p_sinker':'싱커','p_cutter':'커터','p_sweeper':'스위퍼','p_slider':'슬라이더','p_curve':'커브','p_split':'스플리터'}, pL = `파워 ${c.pitch.pow}, 제구 ${c.pitch.con}, 체력 ${c.pitch.sta}`, bL = `파워 ${c.bat.pow}, 컨택 ${c.bat.con}, 주루 ${c.bat.spd}`;
+            let lines = [`[${c.grade.toUpperCase()}] ${c.name}`, `투타: ${c.throws==='L'?'좌투':'우투'}/${c.bats==='L'?'좌타':'우타'}`, c.role==='P'?"투수 스탯: "+pL:"타자 스탯: "+bL, c.role==='P'?"타자 스탯: "+bL:"투수 스탯: "+pL];
+            if(c.role==='P') lines.push("구종: " + (c.pitchList ? c.pitchList.map(p => `${nm[p.id]||p.id}(${p.speed.toFixed(1)}마일)`).join(', ') : "없음")); lines.push(`<h2>해당 연도의 기록 및 수상 기록: ${c.awards}</h2>`); return lines; }
+
+
+
 
 window.processConsoleInput = function(e, K) {
             let isBack = (K === "Backspace" || K === "Escape");
@@ -2660,14 +2659,19 @@ case "ROSTER_SLOTS":
                     else if(K === "ArrowUp") { cur.plyr = Math.max(0, cur.plyr - 1); window.readCurrentState(); } else if(K === "ArrowDown") { cur.plyr = Math.min(lists.players.length - 1, cur.plyr + 1); window.readCurrentState(); }
                     else if(K === " " || K === "Enter") { if(lists.players.length > 0) toggleRosterAssignment(lists.players[cur.plyr], cur.slot); window.readCurrentState(); }
                     else if(K === "ArrowRight") { if(lists.players.length > 0) { lists.info = getPlayerInfoLines(lists.players[cur.plyr], cur.slot); cur.info = 0; window.changeState("ROSTER_INFO"); } } break;
-                case "ROSTER_INFO":
-                    if(isBack || K === "ArrowLeft") { let op = cur.plyr; window.changeState("ROSTER_PLAYERS"); cur.plyr = op; window.readCurrentState(); }
+
+case "ROSTER_INFO":
+                    if(isBack || K === "ArrowLeft") { if(tempVars.infoSrc === "ALL_CARDS") { tempVars.infoSrc = null; window.changeState("ALL_CARDS"); } else { let op = cur.plyr; window.changeState("ROSTER_PLAYERS"); cur.plyr = op; window.readCurrentState(); } }
+
+
                     else if(K === "ArrowUp") { cur.info = Math.max(0, cur.info - 1); window.readCurrentState(); } else if(K === "ArrowDown") { cur.info = Math.min(lists.info.length - 1, cur.info + 1); window.readCurrentState(); }
                     else if(K === " " || K === "Enter") { toggleRosterAssignment(lists.players[cur.plyr], cur.slot); lists.info = getPlayerInfoLines(lists.players[cur.plyr], cur.slot); window.readCurrentState(); } break;
 
 
 case "ALL_CARDS":
-                    if(isBack || (K === "ArrowLeft" && !e.ctrlKey)) window.changeState("ROSTER_MENU");
+
+if(isBack || (K === "ArrowLeft" && !e.ctrlKey)) window.changeState("ROSTER_MENU");
+                    else if(K === "ArrowRight") { if(cur.all > 0) { lists.info = getPlayerInfoLines(lists.allCardsPage[cur.all - 1]); cur.info = 0; tempVars.infoSrc = "ALL_CARDS"; window.changeState("ROSTER_INFO"); } }
 
 else if(K === "ArrowDown") { cur.all = Math.min(lists.allCardsPage.length, cur.all + 1); window.readCurrentState(); } else if(K === "ArrowUp") { cur.all = Math.max(0, cur.all - 1); window.readCurrentState(); }
                     else if(K === "Home") { cur.all = 0; window.readCurrentState(); } else if(K === "End") { cur.all = lists.allCardsPage.length; window.readCurrentState(); }
