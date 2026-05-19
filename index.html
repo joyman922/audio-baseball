@@ -2354,10 +2354,11 @@ window.currentState = "INIT_DB";
             'NL': { '동부 지구': ['애틀랜타 브레이브스', '마이애미 말린스', '뉴욕 메츠', '필라델피아 필리스', '워싱턴 내셔널스'], '중부 지구': ['시카고 컵스', '신시내티 레즈', '밀워키 브루어스', '피츠버그 파이리츠', '세인트루이스 카디널스'], '서부 지구': ['애리조나 다이아몬드백스', '콜로라도 로키스', '로스앤젤레스 다저스', '샌디에이고 파드리스', '샌프란시스코 자이언츠'] }
         };
 
-        function printConsole(text) {
+function printConsole(text, spokenText) {
+            let s = spokenText !== undefined ? spokenText : text;
             let t = document.getElementById("gameConsole"); if(t) t.value = text;
-            let a = document.getElementById("ariaAnnouncer"); if(a) a.innerText = text;
-            speak(text.replace(/\n/g, " "));
+            let a = document.getElementById("ariaAnnouncer"); if(a) a.innerText = s;
+            speak(s.replace(/\n/g, " "));
         }
 
         window.drawGachaCard = function(teamName, role) {
@@ -2372,7 +2373,7 @@ window.currentState = "INIT_DB";
 
 
 async function parseCSVToMap(url, keyIdx, isArray = false) {
-            try { let r = await fetch(url); if(!r.ok) return {}; let map = {}; (await r.text()).split('\n').forEach((x, i) => { if(i===0) return; let row=[], cur='', inQ=false; for(let c of x){ if(c==='"') inQ=!inQ; else if(c===',' && !inQ){ row.push(cur.trim().replace(/(^"|"$)/g,'')); cur=''; } else cur+=c; } row.push(cur.trim().replace(/(^"|"$)/g,'')); let key = row[keyIdx]; if(!key) return; if(isArray){ if(!map[key]) map[key]=[]; map[key].push(row); } else map[key]=row; }); return map; } catch(e) { return {}; }
+            try { let r = await fetch(url); if(!r.ok) return {}; let map = {}; (await r.text()).split('\n').forEach((x, i) => { x = x.trim(); if(!x || i===0) return; let row = x.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(y => y.replace(/(^"|"$)/g, '').trim()); let key = row[keyIdx]; if(!key) return; if(isArray){ if(!map[key]) map[key]=[]; map[key].push(row); } else map[key]=row; }); return map; } catch(e) { return {}; }
         }
 
 
@@ -2444,7 +2445,7 @@ let keys = Object.keys(window.dbMatch), uKeys = new Set(); const getU = () => { 
 window.readCurrentState = function() {
             let txt = "";
             switch(window.currentState) {
-                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.2"]; txt = lists.menu[cur.main]; break;
+                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.3"]; txt = lists.menu[cur.main]; break;
                 case "SINGLE_PLAYER": lists.menu = ["1. 타격 연습", "2. 투구 연습", "3. 연습 게임", "4. 정규 게임", "5. 올스타전", "6. 홈런더비"]; txt = lists.menu[cur.single]; break;
                 case "PRACTICE_INNING": lists.menu = ["3이닝", "6이닝", "9이닝"]; txt = "[연습 게임]\n" + lists.menu[cur.pracIn]; break;
                 case "REGULAR_SEASON": lists.menu = ["162경기 (풀 시즌)", "81경기 (하프 시즌)", "40경기 (미니 시즌)"]; txt = "[정규 게임]\n" + lists.menu[cur.regSn]; break;
@@ -2476,8 +2477,13 @@ case "ROSTER_SLOTS":
 
 
 case "ALL_CARDS":
-                    let cardCountTxt = `[전체 보유 카드: ${window.myCards.length}/100]\n`;
-                    if(lists.allCardsPage.length === 0) txt = cardCountTxt + "보유한 카드가 없습니다."; else { let c = lists.allCardsPage[cur.all]; txt = cardCountTxt + (tempVars.delSet.has(c.id) ? "삭제선택됨 " : "") + `[${c.grade.toUpperCase()}] ${c.name}` + (c.isLocked ? " 잠금" : ""); } break;
+                    let hd = `[전체 보유 카드: ${window.myCards.length}/100]\n`;
+                    if(lists.allCardsPage.length === 0) { printConsole(hd + "보유한 카드가 없습니다."); return; }
+                    let c = lists.allCardsPage[cur.all];
+                    let vList = hd + lists.allCardsPage.map((x, i) => (i === cur.all ? "▶ " : "  ") + `[${x.grade.toUpperCase()}] ${x.name}` + (x.isLocked ? " (잠금)" : "")).join("\n");
+                    let sTxt = (tempVars.delSet.has(c.id) ? "삭제선택됨 " : "") + `[${c.grade.toUpperCase()}] ${c.name}` + (c.isLocked ? " 잠금" : "");
+                    printConsole(vList, sTxt); return;
+
 
 
 
