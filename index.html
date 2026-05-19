@@ -2198,8 +2198,12 @@ document.getElementById("gameConsole").focus();
         document.addEventListener("keydown", function(e) {
             const K = e.key;
             // 게임(타격/투구) 연습 상태가 아닐 때는 메뉴 콘솔 제어기로 넘김
-            if(window.currentState !== "BATTING_PRACTICE" && window.currentState !== "PITCHING_PRACTICE") {
-                if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter","Backspace","Escape"," ","Delete","a","l","c","q"].includes(K) || (e.ctrlKey && (K==="ArrowRight"||K==="ArrowLeft"||K==="a"))) e.preventDefault();
+
+if(window.currentState !== "BATTING_PRACTICE" && window.currentState !== "PITCHING_PRACTICE") {
+                if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","Enter","Backspace","Escape"," ","Delete","a","l","c","q"].includes(K) || (e.ctrlKey && (K==="ArrowRight"||K==="ArrowLeft"||K==="a"))) e.preventDefault();
+
+
+
                 if(window.processConsoleInput) window.processConsoleInput(e, K);
                 return;
             }
@@ -2445,7 +2449,7 @@ let keys = Object.keys(window.dbMatch), uKeys = new Set(); const getU = () => { 
 window.readCurrentState = function() {
             let txt = "";
             switch(window.currentState) {
-                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.4"]; txt = lists.menu[cur.main]; break;
+                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.5"]; txt = lists.menu[cur.main]; break;
                 case "SINGLE_PLAYER": lists.menu = ["1. 타격 연습", "2. 투구 연습", "3. 연습 게임", "4. 정규 게임", "5. 올스타전", "6. 홈런더비"]; txt = lists.menu[cur.single]; break;
                 case "PRACTICE_INNING": lists.menu = ["3이닝", "6이닝", "9이닝"]; txt = "[연습 게임]\n" + lists.menu[cur.pracIn]; break;
                 case "REGULAR_SEASON": lists.menu = ["162경기 (풀 시즌)", "81경기 (하프 시즌)", "40경기 (미니 시즌)"]; txt = "[정규 게임]\n" + lists.menu[cur.regSn]; break;
@@ -2665,7 +2669,8 @@ case "ROSTER_SLOTS":
 case "ALL_CARDS":
                     if(isBack || (K === "ArrowLeft" && !e.ctrlKey)) window.changeState("ROSTER_MENU");
 
-else if(K === "ArrowDown") { cur.all = Math.min(lists.allCardsPage.length, cur.all + 1); window.readCurrentState(); }
+else if(K === "ArrowDown") { cur.all = Math.min(lists.allCardsPage.length, cur.all + 1); window.readCurrentState(); } else if(K === "ArrowUp") { cur.all = Math.max(0, cur.all - 1); window.readCurrentState(); }
+                    else if(K === "Home") { cur.all = 0; window.readCurrentState(); } else if(K === "End") { cur.all = lists.allCardsPage.length; window.readCurrentState(); }
 
 
 
