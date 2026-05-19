@@ -2445,7 +2445,7 @@ let keys = Object.keys(window.dbMatch), uKeys = new Set(); const getU = () => { 
 window.readCurrentState = function() {
             let txt = "";
             switch(window.currentState) {
-                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.3"]; txt = lists.menu[cur.main]; break;
+                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.4"]; txt = lists.menu[cur.main]; break;
                 case "SINGLE_PLAYER": lists.menu = ["1. 타격 연습", "2. 투구 연습", "3. 연습 게임", "4. 정규 게임", "5. 올스타전", "6. 홈런더비"]; txt = lists.menu[cur.single]; break;
                 case "PRACTICE_INNING": lists.menu = ["3이닝", "6이닝", "9이닝"]; txt = "[연습 게임]\n" + lists.menu[cur.pracIn]; break;
                 case "REGULAR_SEASON": lists.menu = ["162경기 (풀 시즌)", "81경기 (하프 시즌)", "40경기 (미니 시즌)"]; txt = "[정규 게임]\n" + lists.menu[cur.regSn]; break;
@@ -2478,11 +2478,16 @@ case "ROSTER_SLOTS":
 
 case "ALL_CARDS":
                     let hd = `[전체 보유 카드: ${window.myCards.length}/100]\n`;
-                    if(lists.allCardsPage.length === 0) { printConsole(hd + "보유한 카드가 없습니다."); return; }
-                    let c = lists.allCardsPage[cur.all];
-                    let vList = hd + lists.allCardsPage.map((x, i) => (i === cur.all ? "▶ " : "  ") + `[${x.grade.toUpperCase()}] ${x.name}` + (x.isLocked ? " (잠금)" : "")).join("\n");
-                    let sTxt = (tempVars.delSet.has(c.id) ? "삭제선택됨 " : "") + `[${c.grade.toUpperCase()}] ${c.name}` + (c.isLocked ? " 잠금" : "");
+
+if(lists.allCardsPage.length === 0) { printConsole(hd + "보유한 카드가 없습니다.", `보유 카드 0/100, 1/1페이지. 보유한 카드가 없습니다.`); return; }
+
+let totalPages = Math.max(1, Math.ceil(window.myCards.length / 25)), bar = `보유 카드 ${window.myCards.length}/100, ${tempVars.page+1}/${totalPages}페이지`, c = lists.allCardsPage[cur.all - 1];
+                    let vList = (cur.all === 0 ? "▶ " : "  ") + bar + "\n" + lists.allCardsPage.map((x, i) => (i === cur.all - 1 ? "▶ " : "  ") + `[${x.grade.toUpperCase()}] ${x.name}` + (x.isLocked ? " (잠금)" : "")).join("\n");
+                    let sTxt = cur.all === 0 ? bar : (tempVars.delSet.has(c.id) ? "삭제선택됨 " : "") + `[${c.grade.toUpperCase()}] ${c.name}` + (c.isLocked ? " 잠금" : "");
+
+
                     printConsole(vList, sTxt); return;
+
 
 
 
@@ -2659,11 +2664,21 @@ case "ROSTER_SLOTS":
 
 case "ALL_CARDS":
                     if(isBack || (K === "ArrowLeft" && !e.ctrlKey)) window.changeState("ROSTER_MENU");
-                    else if(K === "ArrowUp") { cur.all = Math.max(0, cur.all - 1); window.readCurrentState(); } else if(K === "ArrowDown") { cur.all = Math.min(lists.allCardsPage.length - 1, cur.all + 1); window.readCurrentState(); }
+
+else if(K === "ArrowDown") { cur.all = Math.min(lists.allCardsPage.length, cur.all + 1); window.readCurrentState(); }
+
+
+
                     else if(e.ctrlKey && K === "ArrowRight") { tempVars.page++; loadAllCardsPage(tempVars.page); cur.all = 0; window.readCurrentState(); }
                     else if(e.ctrlKey && K === "ArrowLeft") { if(tempVars.page > 0) { tempVars.page--; loadAllCardsPage(tempVars.page); cur.all = 0; window.readCurrentState(); } }
-                    else if(K === "l") { if(lists.allCardsPage.length > 0) { let c = lists.allCardsPage[cur.all]; c.isLocked = !c.isLocked; window.saveCards(); speak(c.isLocked ? "잠금" : "잠금 해제됨"); window.readCurrentState(); } }
-                    else if(K === " ") { if(lists.allCardsPage.length > 0) { let c = lists.allCardsPage[cur.all]; if(c.isLocked) return speak("잠긴 카드"); if(tempVars.delSet.has(c.id)) { tempVars.delSet.delete(c.id); speak("해제"); } else { tempVars.delSet.add(c.id); speak("삭제선택"); } window.readCurrentState(); } }
+
+else if(K === "l") { if(cur.all > 0) { let c = lists.allCardsPage[cur.all - 1]; c.isLocked = !c.isLocked; window.saveCards(); speak(c.isLocked ? "잠금" : "잠금 해제됨"); window.readCurrentState(); } }
+
+
+
+else if(K === " ") { if(cur.all > 0) { let c = lists.allCardsPage[cur.all - 1]; if(c.isLocked) return speak("잠긴 카드"); if(tempVars.delSet.has(c.id)) { tempVars.delSet.delete(c.id); speak("해제"); } else { tempVars.delSet.add(c.id); speak("삭제선택"); } window.readCurrentState(); } }
+
+
                     else if(e.ctrlKey && K === "a") { lists.allCardsPage.forEach(c => { if(!c.isLocked) tempVars.delSet.add(c.id); }); speak("페이지 전체 선택"); window.readCurrentState(); }
 
 else if(K === "Delete") { if(tempVars.delSet.size > 0) window.changeState("CONFIRM_DELETE"); else speak("대상을 선택하세요."); } break;
