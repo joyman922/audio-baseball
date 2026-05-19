@@ -2372,8 +2372,9 @@ function printConsole(text, spokenText) {
             let grade = rollGrade(); let cRole = role === 'Any' ? (Math.random() < 0.5 ? 'P' : 'B') : role;
             let keys = Object.keys(window.dbMatch); if(keys.length === 0) return speak("데이터 동기화 대기중입니다.");
 
-let rID = keys[Math.floor(Math.random() * keys.length)]; let cardYear = window.targetYears[Math.floor(Math.random() * window.targetYears.length)];
-            let c = buildAdvancedCard(window.dbMatch[rID][0], window.dbMatch[rID][10], teamName, cRole, grade, cardYear);
+let cY = window.targetYears[Math.floor(Math.random()*window.targetYears.length)], tm = {'오리올스':'BAL','레드삭스':'BOS','양키스':'NYA','레이스':'TBA','제이스':'TOR','화이트삭스':'CHA','가디언스':'CLE','타이거스':'DET','로열스':'KCA','트윈스':'MIN','애스트로스':'HOU','에인절스':'LAA','애슬레틱스':'OAK','매리너스':'SEA','레인저스':'TEX','브레이브스':'ATL','말린스':'MIA','메츠':'NYN','필리스':'PHI','내셔널스':'WAS','컵스':'CHN','레즈':'CIN','브루어스':'MIL','파이리츠':'PIT','카디널스':'SLN','다이아몬드백스':'ARI','로키스':'COL','다저스':'LAN','파드리스':'SDN','자이언츠':'SFN'}, rTm = Object.keys(tm).find(k=>teamName.includes(k));
+let vKeys = keys.filter(k => { let rs = cRole==='P'?(window.dbPitching[window.dbMatch[k][0]]||[]):(window.dbBatting[window.dbMatch[k][0]]||[]); return rs.some(x => x[1]===cY && (!rTm || x[3]===tm[rTm])); });
+let rID = vKeys.length > 0 ? vKeys[Math.floor(Math.random() * vKeys.length)] : keys[Math.floor(Math.random() * keys.length)], c = buildAdvancedCard(window.dbMatch[rID][0], window.dbMatch[rID][10], teamName, cRole, grade, cY);
 
 
             window.myCards.push(c); window.saveCards();
@@ -2420,7 +2421,9 @@ let isMVP = aRows.some(x => x[1].includes("MVP")), isCY = aRows.some(x => x[1].i
             pRaw.forEach(r => { let code = r[2] ? r[2].toLowerCase() : ''; if(tMap[code]) pitchList.push({ id: tMap[code], speed: parseFloat(r[3] || 90) }); }); if(pitchList.length === 0) pitchList.push({ id: 'p_4seam', speed: 92.5 }); pitchList.sort((a, b) => b.speed - a.speed);
 
 let pGrade = grade, sIdx = Math.max(0, GRADE_NAMES.indexOf(grade) - 2), sGrade = fullName.includes("Ohtani") ? grade : GRADE_NAMES[sIdx]; let aw = []; if(isMVP) aw.push("MVP"); if(isCY) aw.push("사이영 상"); if(isGG) aw.push("골든글러브"); if(window.top10.ba.has(playerID)) aw.push("타율 탑10"); if(window.top10.era.has(playerID)) aw.push("방어율 탑10"); if(tHR>0) aw.push(`${tHR}홈런`); if(tSB>0) aw.push(`${tSB}도루`); if(tSV>0) aw.push(`${tSV}세이브`);
-            return { id: "C" + Date.now() + Math.floor(Math.random()*1000), name: `${fullName} (${cardYear})`, team: targetTeam, grade: grade, role: forcedRole, subPos: pos, throws: throws, bats: bats, pitchList: pitchList, awards: aw.join(', ') || "기록 없음", rosterSlot: null, isLocked: false, pitch: { pow: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pPowB), con: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pConB), sta: getStat(forcedRole==='P'?pGrade:sGrade, true, forcedRole==='P'?(pos==='RP'||pos==='CL'):true, false, pStaB), def: getStat(null,false,false,true, 0, isGG) }, bat: { pow: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bPowB), con: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bConB), spd: getStat(null, false, false, false, 0, false, true, tSB), def: getStat(null,false,false,true, 0, isGG) } };
+let rTm = forcedRole==='P'?(pitRows.length?pitRows[0][3]:targetTeam):(bRows.length?bRows[0][3]:targetTeam), revTm = {'BAL':'볼티모어','BOS':'보스턴','NYA':'양키스','TBA':'탬파베이','TOR':'토론토','CHA':'화이트삭스','CLE':'가디언스','DET':'타이거스','KCA':'로열스','MIN':'트윈스','HOU':'애스트로스','LAA':'에인절스','OAK':'애슬레틱스','SEA':'매리너스','TEX':'레인저스','ATL':'브레이브스','MIA':'말린스','NYN':'메츠','PHI':'필리스','WAS':'내셔널스','CHN':'컵스','CIN':'레즈','MIL':'브루어스','PIT':'파이리츠','SLN':'카디널스','ARI':'다이아몬드백스','COL':'로키스','LAN':'다저스','SDN':'파드리스','SFN':'자이언츠'};
+            return { id: "C" + Date.now() + Math.floor(Math.random()*1000), name: `${fullName} (${cardYear})`, team: revTm[rTm]||targetTeam, grade: grade, role: forcedRole, subPos: pos, throws: throws, bats: bats, pitchList: pitchList, awards: aw.join(', ') || "기록 없음", rosterSlot: null, isLocked: false, pitch: { pow: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pPowB), con: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pConB), sta: getStat(forcedRole==='P'?pGrade:sGrade, true, forcedRole==='P'?(pos==='RP'||pos==='CL'):true, false, pStaB), def: getStat(null,false,false,true, 0, isGG) }, bat: { pow: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bPowB), con: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bConB), spd: getStat(null, false, false, false, 0, false, true, tSB), def: getStat(null,false,false,true, 0, isGG) } };
+
 
 
 
@@ -2435,11 +2438,9 @@ function grantStarterPack(teamName) {
 
 
 
-let keys = Object.keys(window.dbMatch), uKeys = new Set(); const getU = () => { let k; do { k = keys[Math.floor(Math.random()*keys.length)]; } while(uKeys.has(k)); uKeys.add(k); return k; };
-                for(let i=0; i<9; i++) { let u=getU(); let c = buildAdvancedCard(window.dbMatch[u][0], u, teamName, 'B', i===0?rollGrade(true):rollGrade()); c.rosterSlot = i; window.myCards.push(c); }
-                for(let i=0; i<4; i++) { let u=getU(); let c = buildAdvancedCard(window.dbMatch[u][0], u, teamName, 'B', rollGrade()); c.rosterSlot = 9; window.myCards.push(c); }
-                for(let i=0; i<5; i++) { let u=getU(); let c = buildAdvancedCard(window.dbMatch[u][0], u, teamName, 'P', i===0?rollGrade(true):rollGrade()); c.rosterSlot = (10+i); window.myCards.push(c); }
-                for(let i=0; i<8; i++) { let u=getU(); let c = buildAdvancedCard(window.dbMatch[u][0], u, teamName, 'P', rollGrade()); c.rosterSlot = 15; window.myCards.push(c); }
+let y=window.targetYears, tm={'오리올스':'BAL','레드삭스':'BOS','양키스':'NYA','레이스':'TBA','제이스':'TOR','화이트삭스':'CHA','가디언스':'CLE','타이거스':'DET','로열스':'KCA','트윈스':'MIN','애스트로스':'HOU','에인절스':'LAA','애슬레틱스':'OAK','매리너스':'SEA','레인저스':'TEX','브레이브스':'ATL','말린스':'MIA','메츠':'NYN','필리스':'PHI','내셔널스':'WAS','컵스':'CHN','레즈':'CIN','브루어스':'MIL','파이리츠':'PIT','카디널스':'SLN','다이아몬드백스':'ARI','로키스':'COL','다저스':'LAN','파드리스':'SDN','자이언츠':'SFN'}, rTm=Object.keys(tm).find(k=>teamName.includes(k));
+let uKeys=new Set(); const getU = (role) => { let a=Object.keys(window.dbMatch).filter(k=>{let rs=role==='P'?(window.dbPitching[window.dbMatch[k][0]]||[]):(window.dbBatting[window.dbMatch[k][0]]||[]); return rs.some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm]));}), k=a.length?a[Math.floor(Math.random()*a.length)]:Object.keys(window.dbMatch)[0]; do{k=a.length?a[Math.floor(Math.random()*a.length)]:k;}while(uKeys.has(k)&&a.length>uKeys.size); uKeys.add(k); return {u:k, yr:y[Math.floor(Math.random()*y.length)]}; };
+for(let i=0; i<13; i++) { let o=getU('B'); let c=buildAdvancedCard(window.dbMatch[o.u][0], o.u, teamName, 'B', i===0?rollGrade(true):rollGrade(), o.yr); c.rosterSlot = i<9?i:9; window.myCards.push(c); } for(let i=0; i<13; i++) { let o=getU('P'); let c=buildAdvancedCard(window.dbMatch[o.u][0], o.u, teamName, 'P', i===0?rollGrade(true):rollGrade(), o.yr); c.rosterSlot = i<5?(10+i):15; window.myCards.push(c); }
 
 
 
@@ -2453,7 +2454,7 @@ let keys = Object.keys(window.dbMatch), uKeys = new Set(); const getU = () => { 
 window.readCurrentState = function() {
             let txt = "";
             switch(window.currentState) {
-                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.7"]; txt = lists.menu[cur.main]; break;
+                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.8"]; txt = lists.menu[cur.main]; break;
                 case "SINGLE_PLAYER": lists.menu = ["1. 타격 연습", "2. 투구 연습", "3. 연습 게임", "4. 정규 게임", "5. 올스타전", "6. 홈런더비"]; txt = lists.menu[cur.single]; break;
                 case "PRACTICE_INNING": lists.menu = ["3이닝", "6이닝", "9이닝"]; txt = "[연습 게임]\n" + lists.menu[cur.pracIn]; break;
                 case "REGULAR_SEASON": lists.menu = ["162경기 (풀 시즌)", "81경기 (하프 시즌)", "40경기 (미니 시즌)"]; txt = "[정규 게임]\n" + lists.menu[cur.regSn]; break;
@@ -2473,7 +2474,8 @@ window.readCurrentState = function() {
                 case "ROSTER_MENU": lists.menu = ["1. 로스터 명단", "2. 전체 카드 목록"]; txt = lists.menu[cur.rst]; break;
 
 case "ROSTER_SLOTS":
-                    let sn = cur.slot; if(sn >= 0 && sn <= 8) txt = `${sn+1}번 타자`; else if(sn === 9) txt = "대타 요원 목록"; else if(sn >= 10 && sn <= 14) txt = `${sn-9}선발 투수`; else if(sn === 15) txt = "불펜 요원 목록";
+                    let sn = cur.slot, pL = window.myCards.filter(c => c.rosterSlot === sn); if(sn >= 0 && sn <= 8) txt = `${sn+1}번 타자: ${pL.length?pL[0].name:"공백"}`; else if(sn >= 10 && sn <= 14) txt = `${sn-9}선발 투수: ${pL.length?pL[0].name:"공백"}`;
+                    else if(sn === 9) txt = `대타 요원 (${pL.length}명): ${pL.map(c=>c.name).join(', ')||'공백'}`; else if(sn === 15) txt = `불펜 요원 (${pL.length}명): ${pL.map(c=>c.name).join(', ')||'공백'}`;
                     if(tempVars.swapSource === cur.slot) txt = "선택 " + txt; break;
 
 
@@ -2672,7 +2674,8 @@ case "ROSTER_INFO":
 case "ALL_CARDS":
 
 if(isBack || (K === "ArrowLeft" && !e.ctrlKey)) window.changeState("ROSTER_MENU");
-                    else if(K === "ArrowRight") { if(cur.all > 0) { lists.info = getPlayerInfoLines(lists.allCardsPage[cur.all - 1]); cur.info = 0; tempVars.infoSrc = "ALL_CARDS"; window.changeState("ROSTER_INFO"); } }
+                    else if(K === "ArrowRight" && !e.ctrlKey) { if(cur.all > 0) { lists.info = getPlayerInfoLines(lists.allCardsPage[cur.all - 1]); cur.info = 0; tempVars.infoSrc = "ALL_CARDS"; window.changeState("ROSTER_INFO"); } }
+
 
 else if(K === "ArrowDown") { cur.all = Math.min(lists.allCardsPage.length, cur.all + 1); window.readCurrentState(); } else if(K === "ArrowUp") { cur.all = Math.max(0, cur.all - 1); window.readCurrentState(); }
                     else if(K === "Home") { cur.all = 0; window.readCurrentState(); } else if(K === "End") { cur.all = lists.allCardsPage.length; window.readCurrentState(); }
