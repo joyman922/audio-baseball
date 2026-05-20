@@ -2409,14 +2409,12 @@ function buildAdvancedCard(playerID, mlbID, targetTeam, forcedRole, grade, cardY
 
 let pRow = window.dbPeople[playerID] || [], fRows = window.dbFielding[playerID] || [], mRow = Object.values(window.dbMatch).find(x => x[0] === playerID) || [];
             let aRows = (window.dbAwards[playerID] || []).filter(x => x[2] === cardYear), bRows = (window.dbBatting[playerID] || []).filter(x => x[1] === cardYear), pitRows = (window.dbPitching[playerID] || []).filter(x => x[1] === cardYear);
-            let fullName = mRow[1] || `${pRow[14] || "가상"} ${pRow[15] || "선수"}`; let throws = pRow[20] === 'L' ? 'L' : 'R'; let bats = pRow[19] === 'L' ? 'L' : 'R'; let pos='DH'; if(forcedRole==='P') pos=(pitRows.length&&+(pitRows[0][8]||0)/+(pitRows[0][7]||1)<0.5)?'RP':'SP'; else { let pC={}; fRows.filter(x=>x[1]===cardYear&&x[5]!=='P').forEach(x=>pC[x[5]]=(pC[x[5]]||0)+1); pos=Object.keys(pC).sort((a,b)=>pC[b]-pC[a])[0]||'DH'; }
 
-
-
-
-
+let fullName = mRow[1] || `${pRow[14] || "가상"} ${pRow[15] || "선수"}`; if(fullName.includes("Ohtani")) forcedRole='P'; let throws = pRow[20] === 'L' ? 'L' : 'R'; let bats = pRow[19] === 'L' ? 'L' : 'R'; let pos='DH'; if(forcedRole==='P') pos=(pitRows.length&&+(pitRows[0][8]||0)/+(pitRows[0][7]||1)<0.5)?'RP':'SP'; else { let pC={}; fRows.filter(x=>x[1]===cardYear&&x[5]!=='P').forEach(x=>pC[x[5]]=(pC[x[5]]||0)+(+x[6]||0)); pos=Object.keys(pC).sort((a,b)=>pC[b]-pC[a])[0]||'DH'; }
 let ab=0,h=0,hr=0,bb_b=0,sb=0,d=0,t=0,sf=0; bRows.forEach(r=>{ab+=+r[6]||0;h+=+r[8]||0;d+=+r[9]||0;t+=+r[10]||0;hr+=+r[11]||0;bb_b+=+r[15]||0;sb+=+r[13]||0;sf+=+r[20]||0;}); let ba=ab?h/ab:0, ops=(ab+bb_b+sf)?((h+bb_b)/(ab+bb_b+sf))+(ab?(h-d-t-hr+2*d+3*t+4*hr)/ab:0):0, bStat=ab>0?`타율 ${(ba).toFixed(3)}, ${h}안타, ${hr}홈런, ${bb_b}볼넷, ${sb}도루, OPS ${(ops).toFixed(3)}`:"";
 let w=0,l=0,sv=0,so=0,bb_p=0,er=0,ip=0; pitRows.forEach(r=>{w+=+r[5]||0;l+=+r[6]||0;sv+=+r[11]||0;so+=+r[17]||0;bb_p+=+r[16]||0;er+=+r[14]||0;ip+=+r[12]||0;}); let era=ip?(er*27)/ip:0, pStat=ip>0?`${w}승 ${l}패, ${sv}세이브, ${so}삼진, ${bb_p}볼넷, ERA ${(era).toFixed(2)}`:"";
+
+
 let isMVP=aRows.some(x=>x[1]==="Most Valuable Player"), isCY=aRows.some(x=>x[1].includes("Cy Young")), isGG=aRows.some(x=>x[1].includes("Gold Glove")); let pB=(isCY||fullName.includes("Ohtani"))?1:0, bB=(isMVP||fullName.includes("Ohtani"))?1:0, pPowB=pB+(window.top10.sv.has(playerID)?1:0), pConB=pB+(window.top10.so.has(playerID)?1:0), pStaB=pB+(window.top10.era.has(playerID)?1:0), bPowB=bB+(hr>=30?1:0), bConB=bB+(window.top10.ba.has(playerID)?1:0);
 
 
@@ -2426,7 +2424,7 @@ let mID=String(mlbID).replace(/\.0$/,''), pR=window.dbPitch[mID]?.[0]||[], pKeys
 pKeys.forEach((k,i)=>{if(pR[i+2]&&!isNaN(parseFloat(pR[i+2]))) pitchList.push({id:k, speed:parseFloat(pR[i+2])});}); if(!pitchList.length) pitchList.push({id:'p_4seam', speed:92.5}, {id:'p_slider', speed:85.0}, {id:'p_curve', speed:78.0}); pitchList.sort((a,b)=>b.speed-a.speed);
 
 
-let pGrade = grade, sIdx = Math.max(0, GRADE_NAMES.indexOf(grade) - 2), sGrade = fullName.includes("Ohtani") ? grade : GRADE_NAMES[sIdx]; let aw = []; if(isMVP) aw.push("MVP"); if(isCY) aw.push("사이영 상"); if(isGG) aw.push("골든글러브"); if(window.top10.ba.has(playerID)) aw.push("타율 탑10"); if(window.top10.era.has(playerID)) aw.push("방어율 탑10"); if(window.top10.so.has(playerID)) aw.push("탈삼진 탑10"); let rTm = forcedRole==='P'?(pitRows.length?pitRows[0][3]:targetTeam):(bRows.length?bRows[0][3]:targetTeam), revTm = {'BAL':'볼티모어','BOS':'보스턴','NYA':'양키스','TBA':'탬파베이','TOR':'토론토','CHA':'화이트삭스','CLE':'가디언스','DET':'타이거스','KCA':'로열스','MIN':'트윈스','HOU':'애스트로스','LAA':'에인절스','OAK':'애슬레틱스','SEA':'매리너스','TEX':'레인저스','ATL':'브레이브스','MIA':'말린스','NYN':'메츠','PHI':'필리스','WAS':'내셔널스','CHN':'컵스','CIN':'레즈','MIL':'브루어스','PIT':'파이리츠','SLN':'카디널스','ARI':'다이아몬드백스','COL':'로키스','LAN':'다저스','SDN':'파드리스','SFN':'자이언츠'}; return { id: "C" + Date.now() + Math.floor(Math.random()*1000), name: `${fullName} (${cardYear})`, team: revTm[rTm]||targetTeam, grade: grade, role: forcedRole, subPos: pos, throws: throws, bats: bats, pitchList: pitchList, awards: aw.join(', ') || "기록 없음", rStats: {b: bStat, p: pStat, ab: ab, ip: ip}, rosterSlot: null, isLocked: false, pitch: { pow: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pPowB), con: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pConB), sta: getStat(forcedRole==='P'?pGrade:sGrade, true, forcedRole==='P'?(pos==='RP'||pos==='CL'):true, false, pStaB), def: getStat(null,false,false,true, 0, isGG) }, bat: { pow: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bPowB), con: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bConB), spd: getStat(null, false, false, false, 0, false, true, sb), def: getStat(null,false,false,true, 0, isGG) } };
+let pGrade = grade, sIdx = Math.max(0, GRADE_NAMES.indexOf(grade) - 2), sGrade = fullName.includes("Ohtani") ? grade : GRADE_NAMES[sIdx]; let aw = []; if(isMVP) aw.push("MVP"); if(isCY) aw.push("사이영 상"); if(isGG) aw.push("골든글러브"); if(window.top10.ba.has(playerID)) aw.push("타율 탑10"); if(window.top10.era.has(playerID)) aw.push("방어율 탑10"); if(window.top10.so.has(playerID)) aw.push("탈삼진 탑10"); let revTm = {'BAL':'볼티모어','BOS':'보스턴','NYA':'양키스','TBA':'탬파베이','TOR':'토론토','CHA':'화이트삭스','CLE':'가디언스','DET':'타이거스','KCA':'로열스','MIN':'트윈스','HOU':'애스트로스','LAA':'에인절스','OAK':'애슬레틱스','SEA':'매리너스','TEX':'레인저스','ATL':'브레이브스','MIA':'말린스','NYN':'메츠','PHI':'필리스','WAS':'내셔널스','CHN':'컵스','CIN':'레즈','MIL':'브루어스','PIT':'파이리츠','SLN':'카디널스','ARI':'다이아몬드백스','COL':'로키스','LAN':'다저스','SDN':'파드리스','SFN':'자이언츠'}, rTm = forcedRole==='P'?(pitRows.length?pitRows[0][3]:'L'):(bRows.length?bRows[0][3]:'L'); return { id: "C" + Date.now() + Math.floor(Math.random()*1000), name: `${fullName} (${cardYear})`, team: targetTeam==='자유계약(전체)'?(revTm[rTm]||'자유계약'):targetTeam, grade: grade, role: forcedRole, subPos: pos, throws: throws, bats: bats, pitchList: pitchList, awards: aw.join(', ') || "기록 없음", rStats: {b: bStat, p: pStat, ab: ab, ip: ip}, rosterSlot: null, isLocked: false, pitch: { pow: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pPowB), con: getStat(forcedRole==='P'?pGrade:sGrade, false, false, false, pConB), sta: getStat(forcedRole==='P'?pGrade:sGrade, true, forcedRole==='P'?(pos==='RP'||pos==='CL'):true, false, pStaB), def: getStat(null,false,false,true, 0, isGG) }, bat: { pow: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bPowB), con: getStat(forcedRole==='B'?pGrade:sGrade, false, false, false, bConB), spd: getStat(null, false, false, false, 0, false, true, sb), def: getStat(null,false,false,true, 0, isGG) } };
 
 
 
@@ -2466,7 +2464,7 @@ let k=a.length?a[Math.floor(Math.random()*a.length)]:(Object.keys(window.dbMatch
 window.readCurrentState = function() {
             let txt = "";
             switch(window.currentState) {
-                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.16"]; txt = lists.menu[cur.main]; break;
+                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.17"]; txt = lists.menu[cur.main]; break;
                 case "SINGLE_PLAYER": lists.menu = ["1. 타격 연습", "2. 투구 연습", "3. 연습 게임", "4. 정규 게임", "5. 올스타전", "6. 홈런더비"]; txt = lists.menu[cur.single]; break;
                 case "PRACTICE_INNING": lists.menu = ["3이닝", "6이닝", "9이닝"]; txt = "[연습 게임]\n" + lists.menu[cur.pracIn]; break;
                 case "REGULAR_SEASON": lists.menu = ["162경기 (풀 시즌)", "81경기 (하프 시즌)", "40경기 (미니 시즌)"]; txt = "[정규 게임]\n" + lists.menu[cur.regSn]; break;
@@ -2542,9 +2540,9 @@ function getFilteredPlayers(slotIdx) { let sP = ['DH','C','1B','2B','3B','SS','L
         }
 
 function toggleRosterAssignment(player, slotIdx) {
-    let sP = ['DH','C','1B','2B','3B','SS','LF','CF','RF','대타','SP','SP','SP','SP','SP','RP'][slotIdx], isMulti = (slotIdx === 9 || slotIdx === 15);
+    let sP = ['DH','C','1B','2B','3B','SS','LF','CF','RF','대타','SP','SP','SP','SP','SP','RP'][slotIdx], isMulti = (slotIdx === 9 || slotIdx === 15), bNm = player.name.split(' (')[0];
+    if (player.rosterSlot === null && !player.isDH && window.myCards.some(c => c !== player && c.name.split(' (')[0] === bNm && (c.rosterSlot !== null || c.isDH))) return speak("동일한 선수가 이미 로스터에 존재합니다.");
     if (slotIdx !== 0 && !isMulti && player.subPos !== sP && !(player.subPos==='OF' && ['LF','CF','RF'].includes(sP))) return speak(`${sP} 포지션만 배치 가능합니다.`); if (slotIdx === 0 && player.role === 'P' && player.subPos !== 'SP') return speak("불펜은 지명타자가 될 수 없습니다.");
-
 
 
     if (slotIdx === 0 && player.role === 'P') { if(player.isDH) { player.isDH=false; speak("해제"); } else { let ex=window.myCards.find(c=>c.isDH || (c.rosterSlot===0 && !c.isDH)); if(ex) {ex.isDH=false; if(ex.rosterSlot===0) ex.rosterSlot=null;} player.isDH=true; speak("선택"); } }
