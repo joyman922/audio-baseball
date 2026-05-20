@@ -2447,11 +2447,9 @@ let y=window.targetYears, tm={'오리올스':'BAL','레드삭스':'BOS','양키�
 
 let uSet=new Set(); 
 
-const gU=(sp, isP)=>{ let f=(pos)=>Object.keys(window.dbMatch).filter(k=>{ let id=window.dbMatch[k][0]; return !uSet.has(k) && (isP ? (window.dbPitching[id]||[]).some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm])&&(pos==='SP'?(+(x[8]||0)/+(x[7]||1)>=0.5):(+(x[8]||0)/+(x[7]||1)<0.5))) : (window.dbFielding[id]||[]).some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm])&&x[5]!=='P'&&(pos==='ANY'||x[5]===pos||(pos==='OF'&&['LF','CF','RF'].includes(x[5])))));});
-let a=f(sp); if(!a.length && !isP) a=f('ANY'); let k=a.length?a[Math.floor(Math.random()*a.length)]:(Object.keys(window.dbMatch).find(x=>!uSet.has(x))||Object.keys(window.dbMatch)[0]);
-uSet.add(k); return {u:k, yr:y[Math.floor(Math.random()*y.length)]}; };
-
-
+const gU=(sp, isP)=>{ let f=(pos)=>Object.keys(window.dbMatch).filter(k=>{ let id=window.dbMatch[k][0]; return !uSet.has(k) && (isP ? (window.dbPitching[id]||[]).some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm])&&(pos==='SP'?(+(x[8]||0)/+(x[7]||1)>=0.5):(+(x[8]||0)/+(x[7]||1)<0.5))) : ((window.dbFielding[id]||[]).some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm])&&x[5]!=='P'&&(pos==='ANY'||x[5]===pos||(pos==='OF'&&['LF','CF','RF'].includes(x[5])))) || (pos==='ANY' && (window.dbBatting[id]||[]).some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm])))));});
+let a=f(sp); if(!a.length && !isP) a=f('ANY'); if(!a.length) a=Object.keys(window.dbMatch).filter(k=>!uSet.has(k)&&((window.dbBatting[window.dbMatch[k][0]]||[]).some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm]))||(window.dbPitching[window.dbMatch[k][0]]||[]).some(x=>y.includes(x[1])&&(!rTm||x[3]===tm[rTm]))));
+let k=a.length?a[Math.floor(Math.random()*a.length)]:(Object.keys(window.dbMatch).find(x=>!uSet.has(x))||Object.keys(window.dbMatch)[0]); uSet.add(k); return {u:k, yr:y[Math.floor(Math.random()*y.length)]}; };
 ['ANY','C','1B','2B','3B','SS','LF','CF','RF','ANY','ANY','ANY','ANY'].forEach((p,i)=>{ let o=gU(p,false), c=buildAdvancedCard(window.dbMatch[o.u][0], window.dbMatch[o.u][10], teamName, 'B', i===0?rollGrade(true):rollGrade(), o.yr); if(p!=='ANY') c.subPos=p; c.rosterSlot=i<9?i:9; window.myCards.push(c); });
 ['SP','SP','SP','SP','SP','RP','RP','RP','RP','RP','RP','RP','RP'].forEach((p,i)=>{ let o=gU(p,true), c=buildAdvancedCard(window.dbMatch[o.u][0], window.dbMatch[o.u][10], teamName, 'P', i===0?rollGrade(true):rollGrade(), o.yr); c.subPos=p; c.rosterSlot=i<5?(10+i):15; window.myCards.push(c); });
 
@@ -2467,7 +2465,7 @@ uSet.add(k); return {u:k, yr:y[Math.floor(Math.random()*y.length)]}; };
 window.readCurrentState = function() {
             let txt = "";
             switch(window.currentState) {
-                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.14"]; txt = lists.menu[cur.main]; break;
+                case "MAIN_MENU": lists.menu = ["1. 개인 플레이", "2. 카드 뽑기(가챠)", "3. 로스터 및 전체 보유 카드 관리", "4. 게임 소리 설정", "5. 데이터 초기화", "버전 정보: v1.0.15"]; txt = lists.menu[cur.main]; break;
                 case "SINGLE_PLAYER": lists.menu = ["1. 타격 연습", "2. 투구 연습", "3. 연습 게임", "4. 정규 게임", "5. 올스타전", "6. 홈런더비"]; txt = lists.menu[cur.single]; break;
                 case "PRACTICE_INNING": lists.menu = ["3이닝", "6이닝", "9이닝"]; txt = "[연습 게임]\n" + lists.menu[cur.pracIn]; break;
                 case "REGULAR_SEASON": lists.menu = ["162경기 (풀 시즌)", "81경기 (하프 시즌)", "40경기 (미니 시즌)"]; txt = "[정규 게임]\n" + lists.menu[cur.regSn]; break;
